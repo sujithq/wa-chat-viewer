@@ -1,6 +1,6 @@
-# WhatsApp Chat Viewer
+# Chat Export Viewer
 
-WhatsApp Chat Viewer is a client-side Blazor WebAssembly app that opens exported WhatsApp ZIP files and renders conversations in a WhatsApp-like interface.
+Chat Export Viewer is a client-side Blazor WebAssembly app that opens exported WhatsApp ZIP files and renders conversations in a familiar chat interface.
 
 The app runs fully in the browser. Chat parsing, media resolution, and rendering all happen locally on the user device.
 
