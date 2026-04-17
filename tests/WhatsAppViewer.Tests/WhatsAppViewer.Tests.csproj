@@ -1,0 +1,28 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <!-- Enable the Microsoft Testing Platform runner (EnableMSTestRunner is the MSTest-specific property) -->
+    <EnableMSTestRunner>true</EnableMSTestRunner>
+    <!-- Copy all referenced assemblies to output so MTP executable can load them -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- ASP.NET Core shared framework needed because the test project references the Blazor WASM app -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <!-- MSTest unified package that supports the Microsoft Testing Platform -->
+    <PackageReference Include="MSTest" Version="3.7.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\WhatsAppViewer\WhatsAppViewer.csproj" />
+  </ItemGroup>
+
+</Project>
+
+
+

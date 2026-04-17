@@ -1,0 +1,291 @@
+﻿@page "/"
+@using WhatsAppViewer.Models
+@using WhatsAppViewer.Services
+@inject IJSRuntime JS
+
+<PageTitle>WhatsApp Chat Viewer</PageTitle>
+
+<div class="wa-container">
+    <!-- Header -->
+    <div class="wa-header">
+        <div class="wa-header-left">
+            <svg viewBox="0 0 24 24" class="wa-logo" fill="white" width="28" height="28">
+                <path d="M17.498 14.382c-.301-.15-1.767-.867-2.04-.966-.273-.101-.473-.15-.673.15-.197.295-.771.964-.944 1.162-.175.195-.349.21-.646.075-.3-.15-1.263-.465-2.403-1.485-.888-.795-1.484-1.77-1.66-2.07-.175-.3-.019-.465.13-.615.136-.135.301-.345.451-.523.146-.181.194-.301.297-.496.1-.21.049-.375-.025-.524-.075-.15-.672-1.62-.922-2.206-.24-.584-.487-.51-.672-.51-.172-.015-.371-.015-.571-.015-.2 0-.523.074-.797.359-.273.3-1.045 1.02-1.045 2.475s1.07 2.865 1.219 3.075c.149.195 2.105 3.195 5.1 4.485.714.3 1.27.48 1.704.629.714.227 1.365.195 1.88.121.574-.091 1.767-.721 2.016-1.426.255-.705.255-1.29.18-1.425-.074-.135-.27-.21-.57-.345m-5.446 7.443h-.016c-1.77 0-3.524-.48-5.055-1.38l-.36-.214-3.75.975 1.005-3.645-.239-.375a9.869 9.869 0 0 1-1.516-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z"/>
+            </svg>
+            <div class="wa-header-title">
+                <span class="wa-title">@(_conversation?.Title ?? "WhatsApp Chat Viewer")</span>
+                @if (_conversation != null)
+                {
+                    <span class="wa-subtitle">@_conversation.Participants.Count participant(s) &bull; @_conversation.Messages.Count message(s)</span>
+                }
+            </div>
+        </div>
+        <div class="wa-header-right">
+            @if (_conversation != null)
+            {
+                <button class="wa-btn-icon" title="Load another file" @onclick="ResetConversation">
+                    <svg viewBox="0 0 24 24" fill="white" width="20" height="20"><path d="M17 8l-1.41 1.41L17.17 11H9v2h8.17l-1.58 1.58L17 16l4-4-4-4zM5 5h7V3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h7v-2H5V5z"/></svg>
+                </button>
+            }
+        </div>
+    </div>
+
+    <!-- Content area -->
+    @if (_conversation == null)
+    {
+        <!-- Upload Screen -->
+        <div class="wa-upload-screen">
+            <div class="wa-upload-card">
+                <div class="wa-upload-icon">
+                    <svg viewBox="0 0 24 24" fill="#25D366" width="64" height="64">
+                        <path d="M17.498 14.382c-.301-.15-1.767-.867-2.04-.966-.273-.101-.473-.15-.673.15-.197.295-.771.964-.944 1.162-.175.195-.349.21-.646.075-.3-.15-1.263-.465-2.403-1.485-.888-.795-1.484-1.77-1.66-2.07-.175-.3-.019-.465.13-.615.136-.135.301-.345.451-.523.146-.181.194-.301.297-.496.1-.21.049-.375-.025-.524-.075-.15-.672-1.62-.922-2.206-.24-.584-.487-.51-.672-.51-.172-.015-.371-.015-.571-.015-.2 0-.523.074-.797.359-.273.3-1.045 1.02-1.045 2.475s1.07 2.865 1.219 3.075c.149.195 2.105 3.195 5.1 4.485.714.3 1.27.48 1.704.629.714.227 1.365.195 1.88.121.574-.091 1.767-.721 2.016-1.426.255-.705.255-1.29.18-1.425-.074-.135-.27-.21-.57-.345m-5.446 7.443h-.016c-1.77 0-3.524-.48-5.055-1.38l-.36-.214-3.75.975 1.005-3.645-.239-.375a9.869 9.869 0 0 1-1.516-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z"/>
+                    </svg>
+                </div>
+                <h2>WhatsApp Chat Viewer</h2>
+                <p class="wa-upload-desc">Import your exported WhatsApp conversation to view it here.<br/>Your data never leaves your device — everything is processed locally in your browser.</p>
+
+                <div class="wa-dropzone">
+                    <!-- The InputFile covers the entire dropzone for click and drag-and-drop -->
+                    <InputFile OnChange="HandleFileSelected" accept=".zip" class="wa-file-input" />
+                    <svg viewBox="0 0 24 24" fill="#aaa" width="40" height="40"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/></svg>
+                    <p>Drag &amp; drop your <strong>.zip</strong> file here</p>
+                    <p class="wa-or">— or click to browse —</p>
+                </div>
+
+                <div class="wa-instructions">
+                    <h4>How to export your WhatsApp chat:</h4>
+                    <ol>
+                        <li>Open the chat in WhatsApp</li>
+                        <li>Tap the three dots menu (⋮) → More → Export chat</li>
+                        <li>Choose "Include media" or "Without media"</li>
+                        <li>Save the <code>.zip</code> file and upload it here</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <!-- Participant color legend -->
+        <div class="wa-participants-bar">
+            @foreach (var (participant, index) in _conversation.Participants.Select((p, i) => (p, i)))
+            {
+                <span class="wa-participant-badge" style="color: @GetSenderColor(participant)">
+                    <span class="wa-participant-dot" style="background: @GetSenderColor(participant)"></span>
+                    @participant
+                </span>
+            }
+        </div>
+
+        <!-- Chat area -->
+        <div class="wa-chat-area" @ref="_chatAreaRef">
+            @{
+                DateTime? lastDate = null;
+            }
+            @foreach (var msg in _conversation.Messages)
+            {
+                @if (lastDate == null || lastDate.Value.Date != msg.Timestamp.Date)
+                {
+                    <div class="wa-date-divider">
+                        <span>@FormatDate(msg.Timestamp)</span>
+                    </div>
+                    lastDate = msg.Timestamp;
+                }
+
+                @if (msg.IsSystem || msg.Type == MessageType.System)
+                {
+                    <div class="wa-system-msg">@msg.Content</div>
+                }
+                else
+                {
+                    var isSent = IsSentMessage(msg.Sender);
+                    var senderColor = GetSenderColor(msg.Sender);
+                    <div class="wa-msg-row @(isSent ? "sent" : "received")">
+                        <div class="wa-bubble @(isSent ? "bubble-sent" : "bubble-received")">
+                            @if (!isSent && _conversation.Participants.Count > 2)
+                            {
+                                <div class="wa-sender-name" style="color: @senderColor">@msg.Sender</div>
+                            }
+                            @switch (msg.Type)
+                            {
+                                case MessageType.Image when msg.MediaData != null:
+                                    <div class="wa-media-img">
+                                        <img src="data:@msg.MediaMimeType;base64,@Convert.ToBase64String(msg.MediaData)"
+                                             alt="@msg.MediaFileName"
+                                             loading="lazy"
+                                             @onclick="() => OpenLightbox(msg)" />
+                                    </div>
+                                    break;
+                                case MessageType.Video when msg.MediaData != null:
+                                    <div class="wa-media-video">
+                                        <video controls preload="metadata">
+                                            <source src="data:@msg.MediaMimeType;base64,@Convert.ToBase64String(msg.MediaData)" type="@msg.MediaMimeType" />
+                                        </video>
+                                    </div>
+                                    break;
+                                case MessageType.Audio when msg.MediaData != null:
+                                    <div class="wa-media-audio">
+                                        <audio controls preload="metadata">
+                                            <source src="data:@msg.MediaMimeType;base64,@Convert.ToBase64String(msg.MediaData)" type="@msg.MediaMimeType" />
+                                        </audio>
+                                    </div>
+                                    break;
+                                case MessageType.Document when msg.MediaData != null:
+                                    <div class="wa-media-doc">
+                                        <a href="data:@msg.MediaMimeType;base64,@Convert.ToBase64String(msg.MediaData)"
+                                           download="@msg.MediaFileName">
+                                            📄 @msg.MediaFileName
+                                        </a>
+                                    </div>
+                                    break;
+                                case MessageType.MediaOmitted:
+                                    <div class="wa-media-omitted">📎 Media not included in export</div>
+                                    break;
+                                case MessageType.Image or MessageType.Video or MessageType.Audio or MessageType.Document when msg.MediaData == null:
+                                    <div class="wa-media-omitted">📎 @msg.MediaFileName</div>
+                                    break;
+                                default:
+                                    <div class="wa-msg-text">@RenderTextWithEmoji(msg.Content)</div>
+                                    break;
+                            }
+                            <div class="wa-msg-meta">
+                                <span class="wa-time">@msg.Timestamp.ToString("HH:mm")</span>
+                                @if (isSent)
+                                {
+                                    <span class="wa-ticks">✓✓</span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+    }
+
+    <!-- Loading overlay -->
+    @if (_isLoading)
+    {
+        <div class="wa-loading-overlay">
+            <div class="wa-spinner"></div>
+            <p>Parsing conversation…</p>
+        </div>
+    }
+
+    <!-- Error message -->
+    @if (!string.IsNullOrEmpty(_errorMessage))
+    {
+        <div class="wa-error-toast" @onclick="() => _errorMessage = null">
+            ⚠️ @_errorMessage <small>(click to dismiss)</small>
+        </div>
+    }
+
+    <!-- Lightbox -->
+    @if (_lightboxUrl != null)
+    {
+        <div class="wa-lightbox" @onclick="CloseLightbox">
+            <img src="@_lightboxUrl" alt="Full size image" @onclick:stopPropagation />
+            <button class="wa-lightbox-close" @onclick="CloseLightbox">✕</button>
+        </div>
+    }
+</div>
+
+@code {
+    private ChatConversation? _conversation;
+    private bool _isLoading;
+    private string? _errorMessage;
+    private string? _lightboxUrl;
+    private ElementReference _chatAreaRef;
+
+    private readonly WhatsAppChatParser _parser = new();
+    private readonly string[] _senderColors = { "#128C7E", "#075E54", "#25D366", "#34B7F1", "#9C27B0", "#E91E63", "#FF5722", "#795548" };
+
+    private string GetSenderColor(string sender)
+    {
+        var hash = Math.Abs(sender.GetHashCode()) % _senderColors.Length;
+        return _senderColors[hash];
+    }
+
+    private bool IsSentMessage(string sender) => false; // All messages shown as received; no way to know "self" from export
+
+    private async Task HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        if (_isLoading) return;
+        var file = e.File;
+        if (file == null) return;
+
+        if (!file.Name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+        {
+            _errorMessage = "Please select a ZIP file (.zip).";
+            return;
+        }
+
+        _isLoading = true;
+        _errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            // 512 MB max
+            using var stream = file.OpenReadStream(maxAllowedSize: 512L * 1024 * 1024);
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+            ms.Position = 0;
+            _conversation = await _parser.ParseZipAsync(ms);
+            await ScrollToBottomAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+        finally
+        {
+            _isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ResetConversation()
+    {
+        _conversation = null;
+        _lightboxUrl = null;
+        _errorMessage = null;
+    }
+
+    private void OpenLightbox(ChatMessage msg)
+    {
+        if (msg.MediaData != null)
+            _lightboxUrl = $"data:{msg.MediaMimeType};base64,{Convert.ToBase64String(msg.MediaData)}";
+    }
+
+    private void CloseLightbox() => _lightboxUrl = null;
+
+    private async Task ScrollToBottomAsync()
+    {
+        await Task.Delay(100);
+        await JS.InvokeVoidAsync("scrollToBottom", _chatAreaRef);
+    }
+
+    private static string FormatDate(DateTime dt)
+    {
+        if (dt == DateTime.MinValue) return "Unknown date";
+        var today = DateTime.Today;
+        if (dt.Date == today) return "Today";
+        if (dt.Date == today.AddDays(-1)) return "Yesterday";
+        return dt.ToString("dddd, MMMM d, yyyy");
+    }
+
+    private static MarkupString RenderTextWithEmoji(string text)
+    {
+        var escaped = System.Net.WebUtility.HtmlEncode(text);
+        // Linkify URLs
+        escaped = System.Text.RegularExpressions.Regex.Replace(
+            escaped,
+            @"https?://[^\s&lt;&gt;""]+",
+            m => $"<a href=\"{m.Value}\" target=\"_blank\" rel=\"noopener noreferrer\">{m.Value}</a>");
+        // Preserve line breaks
+        escaped = escaped.Replace("\n", "<br/>");
+        return new MarkupString(escaped);
+    }
+}
+
+
