@@ -1,0 +1,23 @@
+# Lightweight CODEOWNERS for core areas.
+# GitHub uses the last matching pattern.
+
+# Default owner for all files
+* @sujithq
+
+# Parser and models
+/src/WhatsAppViewer/Services/WhatsAppChatParser.cs @sujithq
+/src/WhatsAppViewer/Models/ @sujithq
+
+# UI and styling
+/src/WhatsAppViewer/Pages/ @sujithq
+/src/WhatsAppViewer/wwwroot/css/ @sujithq
+
+# Test suites
+/tests/WhatsAppViewer.Tests/ @sujithq
+/tests/WhatsAppViewer.Playwright.Tests/ @sujithq
+
+# CI/CD and contributor guidance
+/.github/workflows/ @sujithq
+/README.md @sujithq
+/.github/pull_request_template.md @sujithq
+/.github/copilot-instructions.md @sujithq
