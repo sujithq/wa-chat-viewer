@@ -44,6 +44,26 @@
                 element.scrollTop = element.scrollHeight;
             }
         };
+
+        window.scrollToMessageByIndex = (container, messageIndex) => {
+            if (!container) {
+                return;
+            }
+
+            const target = container.querySelector(`[data-message-index="${messageIndex}"]`);
+            if (!target) {
+                return;
+            }
+
+            target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            target.classList.remove('wa-msg-row-jump');
+            target.getBoundingClientRect();
+            target.classList.add('wa-msg-row-jump');
+
+            window.setTimeout(() => {
+                target.classList.remove('wa-msg-row-jump');
+            }, 900);
+        };
     </script>
     <script src="_framework/blazor.webassembly.js"></script>
 </body>

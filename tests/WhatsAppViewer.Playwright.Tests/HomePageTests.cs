@@ -1,6 +1,8 @@
 using Microsoft.Playwright;
 using Microsoft.Playwright.MSTest;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using System.IO.Compression;
+using System.Text;
 
 namespace WhatsAppViewer.Playwright.Tests;
 
@@ -20,25 +22,54 @@ public class HomePageTests : PageTest
     public override BrowserNewContextOptions ContextOptions() =>
         new() { BaseURL = BaseUrl };
 
+    private static byte[] CreateZipWithChat(string chatContent)
+    {
+        using var ms = new MemoryStream();
+        using (var archive = new ZipArchive(ms, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            var entry = archive.CreateEntry("_chat.txt");
+            using var stream = entry.Open();
+            using var writer = new StreamWriter(stream, Encoding.UTF8);
+            writer.Write(chatContent);
+        }
+
+        return ms.ToArray();
+    }
+
+    private async Task UploadChatAsync(string chatContent)
+    {
+        await Page.GotoAsync("/");
+
+        var file = new FilePayload
+        {
+            Name = "chat-export.zip",
+            MimeType = "application/zip",
+            Buffer = CreateZipWithChat(chatContent)
+        };
+
+        await Page.SetInputFilesAsync(".wa-file-input", file);
+        await Expect(Page.Locator(".wa-chat-area")).ToBeVisibleAsync();
+    }
+
     [TestMethod]
     public async Task PageTitle_IsWhatsAppChatViewer()
     {
         await Page.GotoAsync("/");
-        await Expect(Page).ToHaveTitleAsync("WhatsApp Chat Viewer");
+        await Expect(Page).ToHaveTitleAsync("Chat Export Viewer");
     }
 
     [TestMethod]
     public async Task Header_ShowsAppTitle()
     {
         await Page.GotoAsync("/");
-        await Expect(Page.Locator(".wa-title")).ToContainTextAsync("WhatsApp Chat Viewer");
+        await Expect(Page.Locator(".wa-title")).ToContainTextAsync("Chat Export Viewer");
     }
 
     [TestMethod]
     public async Task UploadCard_HeadingIsVisible()
     {
         await Page.GotoAsync("/");
-        await Expect(Page.Locator("h2").First).ToContainTextAsync("WhatsApp Chat Viewer");
+        await Expect(Page.Locator("h2").First).ToContainTextAsync("Chat Export Viewer");
     }
 
     [TestMethod]
@@ -61,5 +92,35 @@ public class HomePageTests : PageTest
         await Page.GotoAsync("/");
         await Expect(Page.Locator(".wa-upload-desc"))
             .ToContainTextAsync("never leaves your device");
+    }
+
+    [TestMethod]
+    public async Task SearchControls_AppearAfterChatUpload()
+    {
+        await UploadChatAsync("1/15/24, 9:30 AM - Alice: Hello\n1/15/24, 9:31 AM - Bob: Hi");
+
+        await Expect(Page.Locator(".wa-search")).ToBeVisibleAsync();
+        await Expect(Page.Locator(".wa-search-input")).ToBeVisibleAsync();
+    }
+
+    [TestMethod]
+    public async Task Search_NextPrevious_UpdatesActiveMatch()
+    {
+        await UploadChatAsync(
+            "1/15/24, 9:30 AM - Alice: hello one\n" +
+            "1/15/24, 9:31 AM - Bob: hello two\n" +
+            "1/15/24, 9:32 AM - Alice: hello three");
+
+        var input = Page.Locator(".wa-search-input");
+        await input.FillAsync("hello");
+
+        await Expect(Page.Locator(".wa-search-count")).ToContainTextAsync("1/3");
+        await Expect(Page.Locator(".wa-highlight-active")).ToHaveCountAsync(1);
+
+        await Page.Locator("[aria-label='Next match']").ClickAsync();
+        await Expect(Page.Locator(".wa-search-count")).ToContainTextAsync("2/3");
+
+        await Page.Locator("[aria-label='Previous match']").ClickAsync();
+        await Expect(Page.Locator(".wa-search-count")).ToContainTextAsync("1/3");
     }
 }

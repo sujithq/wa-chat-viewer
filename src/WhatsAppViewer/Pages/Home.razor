@@ -23,6 +23,44 @@
         <div class="wa-header-right">
             @if (_conversation != null)
             {
+                <div class="wa-search" role="search">
+                    <input class="wa-search-input"
+                           type="text"
+                           placeholder="Search messages"
+                           value="@_searchQuery"
+                           @oninput="HandleSearchInput"
+                           @onkeydown="HandleSearchKeyDown"
+                           aria-label="Search messages" />
+                    <span class="wa-search-count" role="status" aria-live="polite">@GetSearchStatusText()</span>
+                    <label class="wa-search-case" title="Match case">
+                        <input type="checkbox"
+                               checked="@_searchCaseSensitive"
+                               @onchange="HandleCaseSensitivityChanged"
+                               aria-label="Match case" />
+                        Aa
+                    </label>
+                    <button class="wa-search-btn"
+                            title="Previous match"
+                            aria-label="Previous match"
+                            @onclick="GoToPreviousSearchMatchAsync"
+                            disabled="@(!HasSearchResults)">
+                        ↑
+                    </button>
+                    <button class="wa-search-btn"
+                            title="Next match"
+                            aria-label="Next match"
+                            @onclick="GoToNextSearchMatchAsync"
+                            disabled="@(!HasSearchResults)">
+                        ↓
+                    </button>
+                    <button class="wa-search-btn"
+                            title="Clear search"
+                            aria-label="Clear search"
+                            @onclick="ClearSearch"
+                            disabled="@(string.IsNullOrEmpty(_searchQuery))">
+                        ✕
+                    </button>
+                </div>
                 <button class="wa-btn-icon" title="Load another file" aria-label="Load another file" @onclick="ResetConversation">
                     <svg viewBox="0 0 24 24" fill="white" width="20" height="20"><path d="M17 8l-1.41 1.41L17.17 11H9v2h8.17l-1.58 1.58L17 16l4-4-4-4zM5 5h7V3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h7v-2H5V5z"/></svg>
                 </button>
@@ -84,8 +122,9 @@
                 string? lastSender = null;
                 var useRightSide = false;
             }
-            @foreach (var msg in _conversation.Messages)
+            @for (var i = 0; i < _conversation.Messages.Count; i++)
             {
+                var msg = _conversation.Messages[i];
                 @if (lastDate == null || lastDate.Value.Date != msg.Timestamp.Date)
                 {
                     <div class="wa-date-divider">
@@ -113,7 +152,9 @@
                     var isSent = useRightSide;
                     var senderColor = GetSenderColor(msg.Sender);
                     var isInlineMedia = (msg.Type == MessageType.Image || msg.Type == MessageType.Video) && msg.MediaData != null;
-                    <div class="wa-msg-row @(isSent ? "sent" : "received")">
+                    var messageMatches = GetMatchesForMessage(i);
+                    var activeMessageMatch = GetActiveMatchForMessage(i);
+                    <div class="wa-msg-row @(isSent ? "sent" : "received")" data-message-index="@i">
                         <div class="wa-bubble @(isSent ? "bubble-sent" : "bubble-received") @(isInlineMedia ? "bubble-media" : string.Empty)">
                             @if (!isSent && _conversation.Participants.Count > 2)
                             {
@@ -158,7 +199,7 @@
                                     <div class="wa-media-omitted">📎 @msg.MediaFileName</div>
                                     break;
                                 default:
-                                    <div class="wa-msg-text">@RenderTextWithEmoji(msg.Content)</div>
+                                    <div class="wa-msg-text">@RenderTextWithEmoji(msg.Content, messageMatches, activeMessageMatch)</div>
                                     break;
                             }
                             <div class="wa-msg-meta @(isInlineMedia ? "wa-msg-meta-overlay" : string.Empty)">
@@ -208,9 +249,20 @@
     private string? _errorMessage;
     private string? _lightboxUrl;
     private ElementReference _chatAreaRef;
+    private string _searchQuery = string.Empty;
+    private bool _searchCaseSensitive;
+    private readonly List<ChatSearchMatch> _searchMatches = new();
+    private readonly Dictionary<int, List<ChatSearchMatch>> _searchMatchesByMessage = new();
+    private int _activeSearchMatchIndex = -1;
 
     private readonly WhatsAppChatParser _parser = new();
+    private readonly ChatSearchService _searchService = new();
     private readonly string[] _senderColors = { "#128C7E", "#075E54", "#25D366", "#34B7F1", "#9C27B0", "#E91E63", "#FF5722", "#795548" };
+    private static readonly System.Text.RegularExpressions.Regex UrlPattern = new(
+        @"https?://[^\s&lt;&gt;""]+",
+        System.Text.RegularExpressions.RegexOptions.Compiled | System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    private bool HasSearchResults => _searchMatches.Count > 0;
 
     private string GetSenderColor(string sender)
     {
@@ -252,6 +304,7 @@
             await stream.CopyToAsync(ms);
             ms.Position = 0;
             _conversation = await _parser.ParseZipAsync(ms);
+            ClearSearch();
             await ScrollToBottomAsync();
         }
         catch (Exception ex)
@@ -270,6 +323,7 @@
         _conversation = null;
         _lightboxUrl = null;
         _errorMessage = null;
+        ClearSearch();
     }
 
     private void OpenLightbox(ChatMessage msg)
@@ -295,17 +349,181 @@
         return dt.ToString("dddd, MMMM d, yyyy");
     }
 
-    private static MarkupString RenderTextWithEmoji(string text)
+    private void HandleSearchInput(ChangeEventArgs e)
     {
-        var escaped = System.Net.WebUtility.HtmlEncode(text);
-        // Linkify URLs
-        escaped = System.Text.RegularExpressions.Regex.Replace(
+        _searchQuery = e.Value?.ToString() ?? string.Empty;
+        RecalculateSearchMatches();
+    }
+
+    private void HandleCaseSensitivityChanged(ChangeEventArgs e)
+    {
+        _searchCaseSensitive = e.Value is bool value && value;
+        RecalculateSearchMatches();
+    }
+
+    private async Task HandleSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            if (e.ShiftKey)
+                await GoToPreviousSearchMatchAsync();
+            else
+                await GoToNextSearchMatchAsync();
+
+            return;
+        }
+
+        if (e.Key == "Escape")
+            ClearSearch();
+    }
+
+    private async Task GoToNextSearchMatchAsync()
+    {
+        if (!HasSearchResults)
+            return;
+
+        _activeSearchMatchIndex = (_activeSearchMatchIndex + 1) % _searchMatches.Count;
+        await JumpToActiveSearchMatchAsync();
+    }
+
+    private async Task GoToPreviousSearchMatchAsync()
+    {
+        if (!HasSearchResults)
+            return;
+
+        _activeSearchMatchIndex = (_activeSearchMatchIndex - 1 + _searchMatches.Count) % _searchMatches.Count;
+        await JumpToActiveSearchMatchAsync();
+    }
+
+    private async Task JumpToActiveSearchMatchAsync()
+    {
+        if (_activeSearchMatchIndex < 0 || _activeSearchMatchIndex >= _searchMatches.Count)
+            return;
+
+        var target = _searchMatches[_activeSearchMatchIndex];
+        await JS.InvokeVoidAsync("scrollToMessageByIndex", _chatAreaRef, target.MessageIndex);
+        StateHasChanged();
+    }
+
+    private void RecalculateSearchMatches()
+    {
+        _searchMatches.Clear();
+        _searchMatchesByMessage.Clear();
+        _activeSearchMatchIndex = -1;
+
+        if (_conversation == null || string.IsNullOrWhiteSpace(_searchQuery))
+            return;
+
+        var matches = _searchService.FindMatches(
+            _conversation.Messages,
+            _searchQuery,
+            caseSensitive: _searchCaseSensitive,
+            includeSystemMessages: false);
+
+        _searchMatches.AddRange(matches);
+
+        foreach (var match in _searchMatches)
+        {
+            if (!_searchMatchesByMessage.TryGetValue(match.MessageIndex, out var ranges))
+            {
+                ranges = new List<ChatSearchMatch>();
+                _searchMatchesByMessage[match.MessageIndex] = ranges;
+            }
+
+            ranges.Add(match);
+        }
+
+        if (_searchMatches.Count > 0)
+            _activeSearchMatchIndex = 0;
+    }
+
+    private void ClearSearch()
+    {
+        _searchQuery = string.Empty;
+        _searchCaseSensitive = false;
+        _searchMatches.Clear();
+        _searchMatchesByMessage.Clear();
+        _activeSearchMatchIndex = -1;
+    }
+
+    private string GetSearchStatusText()
+    {
+        if (_searchMatches.Count == 0)
+            return "0/0";
+
+        return $"{_activeSearchMatchIndex + 1}/{_searchMatches.Count}";
+    }
+
+    private IReadOnlyList<ChatSearchMatch>? GetMatchesForMessage(int messageIndex)
+    {
+        if (_searchMatchesByMessage.TryGetValue(messageIndex, out var matches))
+            return matches;
+
+        return null;
+    }
+
+    private ChatSearchMatch? GetActiveMatchForMessage(int messageIndex)
+    {
+        if (_activeSearchMatchIndex < 0 || _activeSearchMatchIndex >= _searchMatches.Count)
+            return null;
+
+        var active = _searchMatches[_activeSearchMatchIndex];
+        return active.MessageIndex == messageIndex ? active : null;
+    }
+
+    private static string EncodeAndFormatText(string value)
+    {
+        var escaped = System.Net.WebUtility.HtmlEncode(value);
+        escaped = UrlPattern.Replace(
             escaped,
-            @"https?://[^\s&lt;&gt;""]+",
             m => $"<a href=\"{m.Value}\" target=\"_blank\" rel=\"noopener noreferrer\">{m.Value}</a>");
-        // Preserve line breaks
-        escaped = escaped.Replace("\n", "<br/>");
-        return new MarkupString(escaped);
+        return escaped.Replace("\n", "<br/>");
+    }
+
+    private static MarkupString RenderTextWithEmoji(
+        string text,
+        IReadOnlyList<ChatSearchMatch>? matches,
+        ChatSearchMatch? activeMatch)
+    {
+        if (matches == null || matches.Count == 0)
+            return new MarkupString(EncodeAndFormatText(text));
+
+        var builder = new System.Text.StringBuilder();
+        var cursor = 0;
+
+        foreach (var match in matches.OrderBy(m => m.Start))
+        {
+            if (match.Start < 0 || match.Start >= text.Length || match.Length <= 0)
+                continue;
+
+            if (match.Start < cursor)
+                continue;
+
+            if (match.Start > cursor)
+            {
+                var plain = text[cursor..match.Start];
+                builder.Append(EncodeAndFormatText(plain));
+            }
+
+            var end = Math.Min(text.Length, match.Start + match.Length);
+            var segment = text[match.Start..end];
+            var isActive = activeMatch != null &&
+                           activeMatch.Start == match.Start &&
+                           activeMatch.Length == match.Length;
+
+            builder.Append(isActive
+                ? "<mark class=\"wa-highlight wa-highlight-active\">"
+                : "<mark class=\"wa-highlight\">");
+            builder.Append(EncodeAndFormatText(segment));
+            builder.Append("</mark>");
+
+            cursor = end;
+        }
+
+        if (cursor < text.Length)
+            builder.Append(EncodeAndFormatText(text[cursor..]));
+
+        return new MarkupString(builder.ToString());
     }
 }
 
