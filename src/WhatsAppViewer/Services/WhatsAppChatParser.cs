@@ -48,6 +48,7 @@ public class WhatsAppChatParser
         foreach (var rawLine in lines)
         {
             var line = rawLine.TrimEnd('\r');
+            line = TrimLeadingUnicodeMarkers(line);
             if (string.IsNullOrEmpty(line)) continue;
 
             // Try to parse as a new message
@@ -101,6 +102,24 @@ public class WhatsAppChatParser
         }
 
         return conversation;
+    }
+
+    private static string TrimLeadingUnicodeMarkers(string value)
+    {
+        var index = 0;
+        while (index < value.Length)
+        {
+            var ch = value[index];
+            if (ch is '\u200E' or '\u200F' or '\uFEFF')
+            {
+                index++;
+                continue;
+            }
+
+            break;
+        }
+
+        return index == 0 ? value : value[index..];
     }
 
     private ChatMessage? TryParseMessageLine(string line)
