@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- MSTest run settings for Playwright E2E tests.
+     Runs headless Chromium. To use a different browser, change BrowserName
+     to 'firefox' or 'webkit'. To target a running app, set the
+     PLAYWRIGHT_TEST_BASE_URL environment variable (defaults to http://localhost:5000
+     as configured in HomePageTests.cs). -->
+<RunSettings>
+  <Playwright>
+    <BrowserName>chromium</BrowserName>
+    <LaunchOptions>
+      <Headless>true</Headless>
+    </LaunchOptions>
+  </Playwright>
+</RunSettings>

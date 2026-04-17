@@ -15,16 +15,17 @@ This repository contains **WhatsApp Chat Viewer**, a client-side Blazor WebAssem
 ## Repository structure
 
 ```
-src/WhatsAppViewer/          # Blazor WASM app
-  Models/                    # ChatConversation.cs, ChatMessage.cs
-  Services/                  # WhatsAppChatParser.cs
-  Pages/                     # Home.razor (main UI)
-  Layout/                    # MainLayout.razor, NavMenu.razor
-  wwwroot/                   # Static assets (css, icons, etc.)
-tests/WhatsAppViewer.Tests/  # xUnit test project
+src/WhatsAppViewer/                     # Blazor WASM app
+  Models/                               # ChatConversation.cs, ChatMessage.cs
+  Services/                             # WhatsAppChatParser.cs
+  Pages/                                # Home.razor (main UI)
+  Layout/                               # MainLayout.razor, NavMenu.razor
+  wwwroot/                              # Static assets (css, icons, etc.)
+tests/WhatsAppViewer.Tests/             # xUnit unit tests (parser logic)
+tests/WhatsAppViewer.Playwright.Tests/  # Playwright E2E tests (UI, MSTest)
 .github/workflows/
-  deploy.yml                 # GitHub Pages deployment
-  copilot-setup-steps.yml    # Pre-installs .NET 10 + restores packages before firewall
+  deploy.yml                            # GitHub Pages deployment
+  copilot-setup-steps.yml               # Pre-installs .NET 10 + restores packages before firewall
 ```
 
 ## Build and test commands
@@ -33,12 +34,23 @@ tests/WhatsAppViewer.Tests/  # xUnit test project
 # Build the app
 dotnet build src/WhatsAppViewer
 
-# Run tests
+# Run unit tests (xUnit)
 dotnet test tests/WhatsAppViewer.Tests
+
+# Run E2E tests (Playwright / MSTest)
+# 1. Start the dev server first:
+dotnet run --project src/WhatsAppViewer --urls http://localhost:5000 &
+# 2. Install Playwright browsers (first time only):
+pwsh tests/WhatsAppViewer.Playwright.Tests/bin/Debug/net10.0/playwright.ps1 install chromium
+# 3. Run the tests:
+PLAYWRIGHT_TEST_BASE_URL=http://localhost:5000 \
+  dotnet test tests/WhatsAppViewer.Playwright.Tests \
+  --settings tests/WhatsAppViewer.Playwright.Tests/playwright.runsettings
 
 # Restore dependencies
 dotnet restore src/WhatsAppViewer/WhatsAppViewer.csproj
 dotnet restore tests/WhatsAppViewer.Tests/WhatsAppViewer.Tests.csproj
+dotnet restore tests/WhatsAppViewer.Playwright.Tests/WhatsAppViewer.Playwright.Tests.csproj
 ```
 
 ## Coding conventions
@@ -69,10 +81,18 @@ dotnet restore tests/WhatsAppViewer.Tests/WhatsAppViewer.Tests.csproj
 
 ## Testing guidelines
 
-- Place all tests in `tests/WhatsAppViewer.Tests/`.
+### Unit tests (xUnit)
+- Place all unit tests in `tests/WhatsAppViewer.Tests/`.
 - Test class names follow the `<Class>Tests` convention (e.g., `WhatsAppChatParserTests`).
 - Assert specific exception types (e.g., `InvalidDataException`) rather than the base `Exception` class.
 - Cover both Android and iOS format variants for any parsing change.
+
+### E2E tests (Playwright / MSTest)
+- Place all E2E tests in `tests/WhatsAppViewer.Playwright.Tests/`.
+- Use `Microsoft.Playwright.MSTest` 1.59.0 with `MSTest.TestAdapter` / `MSTest.TestFramework` 3.7.3 for .NET 10 compatibility.
+- Test classes inherit from `PageTest` and override `ContextOptions()` to set `BaseURL` from `PLAYWRIGHT_TEST_BASE_URL` (defaults to `http://localhost:5000`).
+- Use `playwright.runsettings` to run headless Chromium.
+- The `copilot-setup-steps.yml` builds the project and installs browsers with `playwright.ps1 install chromium`.
 
 ## GitHub Actions / deployment
 
