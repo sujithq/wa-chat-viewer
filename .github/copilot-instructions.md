@@ -8,7 +8,9 @@ This repository contains **WhatsApp Chat Viewer**, a client-side Blazor WebAssem
 
 - **Framework**: Blazor WebAssembly (`.NET 10`, `net10.0`)
 - **Packages**: `Microsoft.AspNetCore.Components.WebAssembly` 10.0.6
-- **Tests**: xUnit (`xunit` 2.9.3, `xunit.runner.visualstudio` 3.1.5, `Microsoft.NET.Test.Sdk` 18.4.0, `coverlet.collector` 8.0.1)
+- **Tests**: Both test projects use **MSTest 3.7.3** with the **Microsoft Testing Platform** (`EnableMSTestRunner=true`)
+  - Unit tests: `MSTest` 3.7.3 (unified package) with `FrameworkReference Microsoft.AspNetCore.App`
+  - E2E tests: `Microsoft.Playwright.MSTest` 1.59.0 + `MSTest.TestAdapter`/`MSTest.TestFramework` 3.7.3 + `Microsoft.NET.Test.Sdk` 18.4.0
 - **Hosting**: GitHub Pages (deployed via `.github/workflows/deploy.yml`)
 - **Language**: C# with nullable reference types and implicit usings enabled
 
@@ -21,8 +23,8 @@ src/WhatsAppViewer/                     # Blazor WASM app
   Pages/                                # Home.razor (main UI)
   Layout/                               # MainLayout.razor, NavMenu.razor
   wwwroot/                              # Static assets (css, icons, etc.)
-tests/WhatsAppViewer.Tests/             # xUnit unit tests (parser logic)
-tests/WhatsAppViewer.Playwright.Tests/  # Playwright E2E tests (UI, MSTest)
+tests/WhatsAppViewer.Tests/             # MSTest unit tests (parser logic) — Microsoft Testing Platform
+tests/WhatsAppViewer.Playwright.Tests/  # Playwright E2E tests (UI, MSTest) — Microsoft Testing Platform
 .github/workflows/
   deploy.yml                            # GitHub Pages deployment
   copilot-setup-steps.yml               # Pre-installs .NET 10 + restores packages before firewall
@@ -34,10 +36,10 @@ tests/WhatsAppViewer.Playwright.Tests/  # Playwright E2E tests (UI, MSTest)
 # Build the app
 dotnet build src/WhatsAppViewer
 
-# Run unit tests (xUnit)
+# Run unit tests (MSTest / Microsoft Testing Platform)
 dotnet test tests/WhatsAppViewer.Tests
 
-# Run E2E tests (Playwright / MSTest)
+# Run E2E tests (Playwright / MSTest / Microsoft Testing Platform)
 # 1. Start the dev server first:
 dotnet run --project src/WhatsAppViewer --urls http://localhost:5000 &
 # 2. Install Playwright browsers (first time only):
@@ -81,15 +83,17 @@ dotnet restore tests/WhatsAppViewer.Playwright.Tests/WhatsAppViewer.Playwright.T
 
 ## Testing guidelines
 
-### Unit tests (xUnit)
+### Unit tests (MSTest / Microsoft Testing Platform)
 - Place all unit tests in `tests/WhatsAppViewer.Tests/`.
 - Test class names follow the `<Class>Tests` convention (e.g., `WhatsAppChatParserTests`).
-- Assert specific exception types (e.g., `InvalidDataException`) rather than the base `Exception` class.
+- Use `[TestClass]` and `[TestMethod]` attributes; use `Assert.AreEqual`, `Assert.IsTrue`, `StringAssert.Contains`, `CollectionAssert.Contains`.
+- Use `await Assert.ThrowsExceptionAsync<T>` for async exception assertions — assert the specific exception type (e.g., `InvalidDataException`) not the base `Exception` class.
 - Cover both Android and iOS format variants for any parsing change.
+- Both test projects use `<EnableMSTestRunner>true</EnableMSTestRunner>` and `<CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>` for MTP support.
 
-### E2E tests (Playwright / MSTest)
+### E2E tests (Playwright / MSTest / Microsoft Testing Platform)
 - Place all E2E tests in `tests/WhatsAppViewer.Playwright.Tests/`.
-- Use `Microsoft.Playwright.MSTest` 1.59.0 with `MSTest.TestAdapter` / `MSTest.TestFramework` 3.7.3 for .NET 10 compatibility.
+- Use `Microsoft.Playwright.MSTest` 1.59.0 with `MSTest.TestAdapter`/`MSTest.TestFramework` 3.7.3 and `Microsoft.NET.Test.Sdk` 18.4.0.
 - Test classes inherit from `PageTest` and override `ContextOptions()` to set `BaseURL` from `PLAYWRIGHT_TEST_BASE_URL` (defaults to `http://localhost:5000`).
 - Use `playwright.runsettings` to run headless Chromium.
 - The `copilot-setup-steps.yml` builds the project and installs browsers with `playwright.ps1 install chromium`.

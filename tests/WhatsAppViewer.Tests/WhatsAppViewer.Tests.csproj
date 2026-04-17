@@ -5,17 +5,17 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
+    <!-- Enable the Microsoft Testing Platform runner (EnableMSTestRunner is the MSTest-specific property) -->
+    <EnableMSTestRunner>true</EnableMSTestRunner>
+    <!-- Copy all referenced assemblies to output so MTP executable can load them -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="coverlet.collector" Version="8.0.1" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.4.0" />
-    <PackageReference Include="xunit" Version="2.9.3" />
-    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Using Include="Xunit" />
+    <!-- ASP.NET Core shared framework needed because the test project references the Blazor WASM app -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <!-- MSTest unified package that supports the Microsoft Testing Platform -->
+    <PackageReference Include="MSTest" Version="3.7.3" />
   </ItemGroup>
 
   <ItemGroup>
@@ -23,3 +23,6 @@
   </ItemGroup>
 
 </Project>
+
+
+

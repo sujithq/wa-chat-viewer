@@ -5,16 +5,23 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
-    <!-- Required so MSTest runner picks up the test assembly -->
     <IsTestProject>true</IsTestProject>
+    <!-- Enable the Microsoft Testing Platform runner (EnableMSTestRunner is the MSTest-specific property) -->
+    <EnableMSTestRunner>true</EnableMSTestRunner>
+    <!-- Copy all referenced assemblies to output so MTP executable can load them -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Newer SDK that activates the MTP OutputType=Exe path (overrides 17.8.0 pulled in by Playwright) -->
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.4.0" />
     <PackageReference Include="Microsoft.Playwright.MSTest" Version="1.59.0" />
-    <!-- Upgrade MSTest packages so the test adapter supports .NET 10 -->
+    <!-- MSTest packages that support the Microsoft Testing Platform -->
     <PackageReference Include="MSTest.TestAdapter" Version="3.7.3" />
     <PackageReference Include="MSTest.TestFramework" Version="3.7.3" />
   </ItemGroup>
 
 </Project>
+
+
+
