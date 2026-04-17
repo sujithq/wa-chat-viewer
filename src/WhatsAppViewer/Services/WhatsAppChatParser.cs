@@ -34,6 +34,7 @@ public class WhatsAppChatParser
 
     private static readonly Regex MediaOmittedPattern = new Regex(@"<Media omitted>|<[^>]+ omitted>", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex AttachedFilePattern = new Regex(@"^(.+?)\s*\(file attached\)$", RegexOptions.Compiled);
+    private static readonly Regex AttachedTagPattern = new Regex(@"^[\u200E\u200F\uFEFF\s]*<attached:\s*(.+?)>[\u200E\u200F\uFEFF\s]*$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     public ChatConversation Parse(string chatText, Dictionary<string, (byte[] Data, string MimeType)>? mediaFiles = null)
     {
@@ -171,6 +172,17 @@ public class WhatsAppChatParser
         if (attachedMatch.Success)
         {
             var fileName = attachedMatch.Groups[1].Value.Trim();
+            msg.MediaFileName = fileName;
+            msg.Content = fileName;
+            msg.Type = DetermineMediaType(fileName);
+            return msg;
+        }
+
+        // iOS-style attachment marker: <attached: filename.ext>
+        var attachedTagMatch = AttachedTagPattern.Match(content);
+        if (attachedTagMatch.Success)
+        {
+            var fileName = attachedTagMatch.Groups[1].Value.Trim();
             msg.MediaFileName = fileName;
             msg.Content = fileName;
             msg.Type = DetermineMediaType(fileName);

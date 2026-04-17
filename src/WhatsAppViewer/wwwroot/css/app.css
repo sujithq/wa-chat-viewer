@@ -167,6 +167,12 @@ html, body { height: 100%; font-family: 'Segoe UI', 'Helvetica Neue', Arial, san
     word-break: break-word;
     box-shadow: 0 1px 2px rgba(0,0,0,.3);
 }
+
+.wa-bubble.bubble-media {
+    max-width: min(75%, 520px);
+    min-width: 160px;
+    padding: 4px;
+}
 .bubble-sent {
     background: #005c4b;
     border-bottom-right-radius: 2px;
@@ -218,22 +224,62 @@ html, body { height: 100%; font-family: 'Segoe UI', 'Helvetica Neue', Arial, san
     gap: 4px;
     margin-top: 3px;
 }
+
+.wa-msg-meta.wa-msg-meta-overlay {
+    position: absolute;
+    right: 10px;
+    bottom: 8px;
+    margin-top: 0;
+    padding: 2px 6px;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.45);
+}
+
+.wa-msg-meta.wa-msg-meta-overlay .wa-time,
+.wa-msg-meta.wa-msg-meta-overlay .wa-ticks {
+    color: #e9edef;
+}
 .wa-time { font-size: 0.7rem; color: #8696a0; }
 .wa-ticks { font-size: 0.7rem; color: #53bdeb; }
 
 /* ===== Media ===== */
+.wa-media-img,
+.wa-media-video {
+    position: relative;
+}
+
 .wa-media-img img {
     max-width: 100%;
-    max-height: 280px;
+    max-height: 420px;
+    min-width: 220px;
+    object-fit: cover;
     border-radius: 6px;
     cursor: zoom-in;
     display: block;
 }
-.wa-media-video video { max-width: 100%; border-radius: 6px; }
+.wa-media-video video {
+    max-width: 100%;
+    max-height: 420px;
+    min-width: 220px;
+    border-radius: 6px;
+    display: block;
+}
 .wa-media-audio audio { width: 100%; min-width: 220px; }
 .wa-media-doc a { color: #53bdeb; text-decoration: none; font-size: 0.88rem; }
 .wa-media-doc a:hover { text-decoration: underline; }
 .wa-media-omitted { font-size: 0.82rem; color: #8696a0; font-style: italic; }
+
+@media (max-width: 600px) {
+    .wa-bubble.bubble-media {
+        max-width: min(88%, 420px);
+    }
+
+    .wa-media-img img,
+    .wa-media-video video {
+        min-width: 180px;
+        max-height: 320px;
+    }
+}
 
 /* ===== Lightbox ===== */
 .wa-lightbox {

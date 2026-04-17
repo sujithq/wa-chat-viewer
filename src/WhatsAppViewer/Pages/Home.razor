@@ -23,7 +23,7 @@
         <div class="wa-header-right">
             @if (_conversation != null)
             {
-                <button class="wa-btn-icon" title="Load another file" @onclick="ResetConversation">
+                <button class="wa-btn-icon" title="Load another file" aria-label="Load another file" @onclick="ResetConversation">
                     <svg viewBox="0 0 24 24" fill="white" width="20" height="20"><path d="M17 8l-1.41 1.41L17.17 11H9v2h8.17l-1.58 1.58L17 16l4-4-4-4zM5 5h7V3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h7v-2H5V5z"/></svg>
                 </button>
             }
@@ -81,6 +81,8 @@
         <div class="wa-chat-area" @ref="_chatAreaRef">
             @{
                 DateTime? lastDate = null;
+                string? lastSender = null;
+                var useRightSide = false;
             }
             @foreach (var msg in _conversation.Messages)
             {
@@ -98,10 +100,21 @@
                 }
                 else
                 {
-                    var isSent = IsSentMessage(msg.Sender);
+                    if (!string.Equals(lastSender, msg.Sender, StringComparison.Ordinal))
+                    {
+                        if (lastSender != null)
+                        {
+                            useRightSide = !useRightSide;
+                        }
+
+                        lastSender = msg.Sender;
+                    }
+
+                    var isSent = useRightSide;
                     var senderColor = GetSenderColor(msg.Sender);
+                    var isInlineMedia = (msg.Type == MessageType.Image || msg.Type == MessageType.Video) && msg.MediaData != null;
                     <div class="wa-msg-row @(isSent ? "sent" : "received")">
-                        <div class="wa-bubble @(isSent ? "bubble-sent" : "bubble-received")">
+                        <div class="wa-bubble @(isSent ? "bubble-sent" : "bubble-received") @(isInlineMedia ? "bubble-media" : string.Empty)">
                             @if (!isSent && _conversation.Participants.Count > 2)
                             {
                                 <div class="wa-sender-name" style="color: @senderColor">@msg.Sender</div>
@@ -148,7 +161,7 @@
                                     <div class="wa-msg-text">@RenderTextWithEmoji(msg.Content)</div>
                                     break;
                             }
-                            <div class="wa-msg-meta">
+                            <div class="wa-msg-meta @(isInlineMedia ? "wa-msg-meta-overlay" : string.Empty)">
                                 <span class="wa-time">@msg.Timestamp.ToString("HH:mm")</span>
                                 @if (isSent)
                                 {
@@ -184,7 +197,7 @@
     {
         <div class="wa-lightbox" @onclick="CloseLightbox">
             <img src="@_lightboxUrl" alt="Full size image" @onclick:stopPropagation />
-            <button class="wa-lightbox-close" @onclick="CloseLightbox">✕</button>
+            <button class="wa-lightbox-close" aria-label="Close image preview" @onclick="CloseLightbox">✕</button>
         </div>
     }
 </div>
@@ -201,11 +214,19 @@
 
     private string GetSenderColor(string sender)
     {
-        var hash = Math.Abs(sender.GetHashCode()) % _senderColors.Length;
-        return _senderColors[hash];
-    }
+        // Stable hash for deterministic sender colors across app runs.
+        unchecked
+        {
+            uint hash = 2166136261;
+            foreach (var ch in sender)
+            {
+                hash ^= ch;
+                hash *= 16777619;
+            }
 
-    private bool IsSentMessage(string sender) => false; // All messages shown as received; no way to know "self" from export
+            return _senderColors[(int)(hash % (uint)_senderColors.Length)];
+        }
+    }
 
     private async Task HandleFileSelected(InputFileChangeEventArgs e)
     {

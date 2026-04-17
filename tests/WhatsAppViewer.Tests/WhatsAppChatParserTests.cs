@@ -76,6 +76,28 @@ public class WhatsAppChatParserTests
     }
 
     [TestMethod]
+    public void Parse_IosAttachedTag_DetectedCorrectly()
+    {
+        var chatText = "[07/04/2026, 15:26:18] Alice: <attached: 00000004-PHOTO-2026-04-07-15-26-18.jpg>";
+        var result = _parser.Parse(chatText);
+
+        Assert.AreEqual(1, result.Messages.Count);
+        Assert.AreEqual(MessageType.Image, result.Messages[0].Type);
+        Assert.AreEqual("00000004-PHOTO-2026-04-07-15-26-18.jpg", result.Messages[0].MediaFileName);
+    }
+
+    [TestMethod]
+    public void Parse_IosAttachedTagWithDirectionMark_DetectedCorrectly()
+    {
+        var chatText = "[07/04/2026, 15:26:18] Alice: \u200E<attached: IMG-1234.jpg>";
+        var result = _parser.Parse(chatText);
+
+        Assert.AreEqual(1, result.Messages.Count);
+        Assert.AreEqual(MessageType.Image, result.Messages[0].Type);
+        Assert.AreEqual("IMG-1234.jpg", result.Messages[0].MediaFileName);
+    }
+
+    [TestMethod]
     public void Parse_MultilineMessage_JoinsLines()
     {
         var chatText = "1/15/24, 9:30 AM - Alice: Line one\nLine two\nLine three";
