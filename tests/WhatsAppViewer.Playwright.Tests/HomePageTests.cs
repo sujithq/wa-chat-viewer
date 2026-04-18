@@ -58,6 +58,22 @@ public class HomePageTests : PageTest
         return ms.ToArray();
     }
 
+    private static byte[] CreateZipWithEntries(params (string Name, byte[] Data)[] entries)
+    {
+        using var ms = new MemoryStream();
+        using (var archive = new ZipArchive(ms, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var (name, data) in entries)
+            {
+                var entry = archive.CreateEntry(name);
+                using var entryStream = entry.Open();
+                entryStream.Write(data, 0, data.Length);
+            }
+        }
+
+        return ms.ToArray();
+    }
+
     private async Task UploadChatAsync(string chatContent)
     {
         await Page.GotoAsync("/");
@@ -74,6 +90,7 @@ public class HomePageTests : PageTest
     }
 
     [TestMethod]
+    [TestCategory("Smoke")]
     public async Task PageTitle_IsWhatsAppChatViewer()
     {
         await Page.GotoAsync("/");
@@ -81,6 +98,7 @@ public class HomePageTests : PageTest
     }
 
     [TestMethod]
+    [TestCategory("Smoke")]
     public async Task Header_ShowsAppTitle()
     {
         await Page.GotoAsync("/");
@@ -147,6 +165,7 @@ public class HomePageTests : PageTest
     }
 
     [TestMethod]
+    [TestCategory("Smoke")]
     public async Task ClickingImage_OpensLightbox()
     {
         await Page.GotoAsync("/");
@@ -171,5 +190,25 @@ public class HomePageTests : PageTest
 
         await Page.Locator("[aria-label='Close image preview']").ClickAsync();
         await Expect(Page.Locator(".wa-lightbox")).ToHaveCountAsync(0);
+    }
+
+    [TestMethod]
+    [TestCategory("Smoke")]
+    public async Task UploadWithUnsupportedChatFile_ShowsErrorToast()
+    {
+        await Page.GotoAsync("/");
+
+        var invalidZip = CreateZipWithEntries(
+            ("notes.txt", Encoding.UTF8.GetBytes("This is not a WhatsApp export")));
+
+        var file = new FilePayload
+        {
+            Name = "chat-export.zip",
+            MimeType = "application/zip",
+            Buffer = invalidZip
+        };
+
+        await Page.SetInputFilesAsync(".wa-file-input", file);
+        await Expect(Page.Locator(".wa-error-toast")).ToContainTextAsync("No supported chat text file found");
     }
 }

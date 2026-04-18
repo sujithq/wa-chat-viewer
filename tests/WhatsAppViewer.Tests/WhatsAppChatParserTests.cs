@@ -9,6 +9,23 @@ public class WhatsAppChatParserTests
 {
     private readonly WhatsAppChatParser _parser = new();
 
+    private static MemoryStream CreateZip(params (string Name, byte[] Data)[] entries)
+    {
+        var ms = new MemoryStream();
+        using (var archive = new System.IO.Compression.ZipArchive(ms, System.IO.Compression.ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var (name, data) in entries)
+            {
+                var entry = archive.CreateEntry(name, System.IO.Compression.CompressionLevel.NoCompression);
+                using var entryStream = entry.Open();
+                entryStream.Write(data, 0, data.Length);
+            }
+        }
+
+        ms.Position = 0;
+        return ms;
+    }
+
     [TestMethod]
     public void Parse_AndroidFormat_ParsesMessages()
     {
@@ -179,6 +196,88 @@ public class WhatsAppChatParserTests
         Assert.AreEqual(2, result.Messages.Count);
         CollectionAssert.Contains(result.Participants, "Alice");
         CollectionAssert.Contains(result.Participants, "Bob");
+    }
+
+    [TestMethod]
+    public async Task ParseZipAsync_ZipWithUnknownTxtFile_ThrowsInvalidOperationException()
+    {
+        var notes = System.Text.Encoding.UTF8.GetBytes("Not a WhatsApp export");
+        using var ms = CreateZip(("notes.txt", notes));
+
+        await Assert.ThrowsExceptionAsync<InvalidOperationException>(() => _parser.ParseZipAsync(ms));
+    }
+
+    [TestMethod]
+    public async Task ParseZipAsync_PrefersKnownChatFileNameOverOtherTextFiles()
+    {
+        var validChat = System.Text.Encoding.UTF8.GetBytes("1/15/24, 9:30 AM - Alice: Hello from chat");
+        var notes = System.Text.Encoding.UTF8.GetBytes("This should not be parsed as chat");
+        using var ms = CreateZip(
+            ("notes.txt", notes),
+            ("_chat.txt", validChat));
+
+        var result = await _parser.ParseZipAsync(ms);
+
+        Assert.AreEqual(1, result.Messages.Count);
+        Assert.AreEqual("Alice", result.Messages[0].Sender);
+        Assert.AreEqual("Hello from chat", result.Messages[0].Content);
+    }
+
+    [TestMethod]
+    public async Task ParseZipAsync_MediaInSubfolder_ResolvesAttachment()
+    {
+        var chatText = System.Text.Encoding.UTF8.GetBytes("1/15/24, 9:30 AM - Alice: IMG-20240115-WA0001.jpg (file attached)");
+        var imageBytes = new byte[] { 0xFF, 0xD8, 0xFF, 0xE0 };
+        using var ms = CreateZip(
+            ("_chat.txt", chatText),
+            ("Media/IMG-20240115-WA0001.jpg", imageBytes));
+
+        var result = await _parser.ParseZipAsync(ms);
+
+        Assert.AreEqual(1, result.Messages.Count);
+        Assert.AreEqual(MessageType.Image, result.Messages[0].Type);
+        Assert.IsNotNull(result.Messages[0].MediaData);
+    }
+
+    [TestMethod]
+    public async Task ParseZipAsync_DuplicateMediaFileNames_DoesNotAttachAmbiguousFile()
+    {
+        var chatText = System.Text.Encoding.UTF8.GetBytes("1/15/24, 9:30 AM - Alice: IMG-20240115-WA0001.jpg (file attached)");
+        using var ms = CreateZip(
+            ("_chat.txt", chatText),
+            ("A/IMG-20240115-WA0001.jpg", new byte[] { 0x01 }),
+            ("B/IMG-20240115-WA0001.jpg", new byte[] { 0x02 }));
+
+        var result = await _parser.ParseZipAsync(ms);
+
+        Assert.AreEqual(1, result.Messages.Count);
+        Assert.IsNull(result.Messages[0].MediaData);
+    }
+
+    [TestMethod]
+    public async Task ParseZipAsync_OversizedMediaFile_ThrowsInvalidDataException()
+    {
+        var parser = new WhatsAppChatParser(maxMediaFileBytes: 1024, maxTotalExtractedBytes: 10 * 1024 * 1024);
+        var chatText = System.Text.Encoding.UTF8.GetBytes("1/15/24, 9:30 AM - Alice: IMG-1.jpg (file attached)");
+        var oversizedMedia = new byte[2048];
+        using var ms = CreateZip(
+            ("_chat.txt", chatText),
+            ("IMG-1.jpg", oversizedMedia));
+
+        await Assert.ThrowsExceptionAsync<InvalidDataException>(() => parser.ParseZipAsync(ms));
+    }
+
+    [TestMethod]
+    public async Task ParseZipAsync_TotalExtractedLimit_ThrowsInvalidDataException()
+    {
+        var parser = new WhatsAppChatParser(maxChatTextBytes: 4096, maxMediaFileBytes: 4096, maxTotalExtractedBytes: 2048);
+        var chatText = System.Text.Encoding.UTF8.GetBytes("1/15/24, 9:30 AM - Alice: IMG-1.jpg (file attached)");
+        using var ms = CreateZip(
+            ("_chat.txt", chatText),
+            ("IMG-1.jpg", new byte[1400]),
+            ("IMG-2.jpg", new byte[1400]));
+
+        await Assert.ThrowsExceptionAsync<InvalidDataException>(() => parser.ParseZipAsync(ms));
     }
 }
 

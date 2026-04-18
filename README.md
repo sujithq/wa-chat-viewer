@@ -113,6 +113,19 @@ The parser currently supports multiple timestamp and message formats and can det
   - filename (file attached)
   - <attached: filename>
 
+ZIP safety limits are enforced during extraction to keep browser memory usage bounded:
+
+- Chat text file limit: 25 MB
+- Single media file limit: 150 MB
+- Total extracted ZIP content limit: 768 MB
+- ZIP media entry limit: 1000 files
+
+Only recognized chat log names are parsed as the conversation text file:
+
+- _chat.txt
+- chat.txt
+- files starting with "WhatsApp Chat with"
+
 When changing parser behavior:
 
 - Add or update unit tests in tests/WhatsAppViewer.Tests/WhatsAppChatParserTests.cs
@@ -152,8 +165,8 @@ Deployment is automated on push to main using .github/workflows/deploy.yml.
 
 The workflow:
 
+- Runs unit tests and Playwright smoke tests first
 - Publishes Blazor assets
-- Rewrites base href for the GitHub Pages repository path
 - Uploads artifact and deploys to GitHub Pages
 
 ## Good First Contribution Areas

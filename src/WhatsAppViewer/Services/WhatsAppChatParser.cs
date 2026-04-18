@@ -7,6 +7,27 @@ namespace WhatsAppViewer.Services;
 
 public class WhatsAppChatParser
 {
+    private const long DefaultMaxChatTextBytes = 25L * 1024 * 1024;
+    private const long DefaultMaxMediaFileBytes = 150L * 1024 * 1024;
+    private const long DefaultMaxTotalExtractedBytes = 768L * 1024 * 1024;
+    private const int DefaultMaxMediaFiles = 1000;
+
+    private readonly long _maxChatTextBytes;
+    private readonly long _maxMediaFileBytes;
+    private readonly long _maxTotalExtractedBytes;
+    private readonly int _maxMediaFiles;
+
+    private static readonly string[] PreferredChatFileNames =
+    {
+        "_chat.txt",
+        "chat.txt"
+    };
+
+    private static readonly string[] PreferredChatFilePrefixes =
+    {
+        "WhatsApp Chat with"
+    };
+
     // Android format: MM/DD/YYYY, HH:MM - Sender: message
     // Android format (24h): DD/MM/YYYY, HH:MM - Sender: message
     // iOS format: [DD/MM/YYYY, HH:MM:SS] Sender: message
@@ -35,6 +56,27 @@ public class WhatsAppChatParser
     private static readonly Regex MediaOmittedPattern = new Regex(@"<Media omitted>|<[^>]+ omitted>", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex AttachedFilePattern = new Regex(@"^(.+?)\s*\(file attached\)$", RegexOptions.Compiled);
     private static readonly Regex AttachedTagPattern = new Regex(@"^[\u200E\u200F\uFEFF\s]*<attached:\s*(.+?)>[\u200E\u200F\uFEFF\s]*$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    public WhatsAppChatParser(
+        long maxChatTextBytes = DefaultMaxChatTextBytes,
+        long maxMediaFileBytes = DefaultMaxMediaFileBytes,
+        long maxTotalExtractedBytes = DefaultMaxTotalExtractedBytes,
+        int maxMediaFiles = DefaultMaxMediaFiles)
+    {
+        if (maxChatTextBytes <= 0)
+            throw new ArgumentOutOfRangeException(nameof(maxChatTextBytes));
+        if (maxMediaFileBytes <= 0)
+            throw new ArgumentOutOfRangeException(nameof(maxMediaFileBytes));
+        if (maxTotalExtractedBytes <= 0)
+            throw new ArgumentOutOfRangeException(nameof(maxTotalExtractedBytes));
+        if (maxMediaFiles <= 0)
+            throw new ArgumentOutOfRangeException(nameof(maxMediaFiles));
+
+        _maxChatTextBytes = maxChatTextBytes;
+        _maxMediaFileBytes = maxMediaFileBytes;
+        _maxTotalExtractedBytes = maxTotalExtractedBytes;
+        _maxMediaFiles = maxMediaFiles;
+    }
 
     public ChatConversation Parse(string chatText, Dictionary<string, (byte[] Data, string MimeType)>? mediaFiles = null)
     {
@@ -227,12 +269,21 @@ public class WhatsAppChatParser
     private static string? FindMediaKey(Dictionary<string, (byte[] Data, string MimeType)> media, string fileName)
     {
         // Exact match
-        if (media.ContainsKey(fileName)) return fileName;
+        var directMatch = media.Keys.FirstOrDefault(k =>
+            string.Equals(k, fileName, StringComparison.OrdinalIgnoreCase));
+        if (directMatch != null)
+            return directMatch;
 
-        // Case-insensitive match
-        var lower = fileName.ToLowerInvariant();
-        return media.Keys.FirstOrDefault(k => k.ToLowerInvariant() == lower ||
-                                               Path.GetFileName(k).ToLowerInvariant() == lower);
+        // Match by filename when the candidate is unique.
+        var filenameMatches = media.Keys
+            .Where(k => string.Equals(Path.GetFileName(k), fileName, StringComparison.OrdinalIgnoreCase))
+            .Take(2)
+            .ToList();
+
+        if (filenameMatches.Count == 1)
+            return filenameMatches[0];
+
+        return null;
     }
 
     private static bool TryParseDateTime(string dateStr, string timeStr, out DateTime result)
@@ -273,37 +324,116 @@ public class WhatsAppChatParser
     public async Task<ChatConversation> ParseZipAsync(Stream zipStream)
     {
         var mediaFiles = new Dictionary<string, (byte[] Data, string MimeType)>(StringComparer.OrdinalIgnoreCase);
-        string? chatText = null;
+        var chatCandidates = new List<ZipArchiveEntry>();
+        long totalExtractedBytes = 0;
+        var mediaCount = 0;
 
         using var archive = new ZipArchive(zipStream, ZipArchiveMode.Read);
 
         foreach (var entry in archive.Entries)
         {
+            if (string.IsNullOrEmpty(entry.Name))
+                continue;
+
             var name = entry.Name;
             var ext = Path.GetExtension(name).ToLowerInvariant();
 
-            // Look for the chat text file
-            if (name.Equals("_chat.txt", StringComparison.OrdinalIgnoreCase) ||
-                name.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(ext, ".txt", StringComparison.OrdinalIgnoreCase))
             {
-                using var stream = entry.Open();
-                using var reader = new StreamReader(stream, Encoding.UTF8);
-                chatText = await reader.ReadToEndAsync();
+                chatCandidates.Add(entry);
+                continue;
             }
-            else if (IsMediaFile(ext))
-            {
-                using var stream = entry.Open();
-                using var ms = new MemoryStream();
-                await stream.CopyToAsync(ms);
-                var mimeType = GetMimeType(ext);
-                mediaFiles[name] = (ms.ToArray(), mimeType);
-            }
+
+            if (!IsMediaFile(ext))
+                continue;
+
+            mediaCount++;
+            if (mediaCount > _maxMediaFiles)
+                throw new InvalidDataException($"The ZIP contains more than {_maxMediaFiles} media files.");
+
+            ValidateEntryLimit(entry, _maxMediaFileBytes, $"Media file '{entry.FullName}'");
+            ValidateTotalExtractionLimit(totalExtractedBytes, entry.Length, _maxTotalExtractedBytes);
+
+            await using var stream = entry.Open();
+            var data = await ReadEntryBytesAsync(stream, _maxMediaFileBytes, $"Media file '{entry.FullName}'");
+            totalExtractedBytes += data.LongLength;
+
+            var mimeType = GetMimeType(ext);
+            mediaFiles[entry.FullName] = (data, mimeType);
         }
 
-        if (chatText == null)
-            throw new InvalidOperationException("No chat text file found in the ZIP archive. Expected a file named '_chat.txt' or a .txt file.");
+        var selectedChat = SelectChatEntry(chatCandidates);
+        if (selectedChat == null)
+            throw new InvalidOperationException("No supported chat text file found in the ZIP archive. Expected '_chat.txt', 'chat.txt', or a filename starting with 'WhatsApp Chat with'.");
+
+        ValidateEntryLimit(selectedChat, _maxChatTextBytes, $"Chat file '{selectedChat.FullName}'");
+        ValidateTotalExtractionLimit(totalExtractedBytes, selectedChat.Length, _maxTotalExtractedBytes);
+
+        await using var chatStream = selectedChat.Open();
+        var chatBytes = await ReadEntryBytesAsync(chatStream, _maxChatTextBytes, $"Chat file '{selectedChat.FullName}'");
+        var chatText = Encoding.UTF8.GetString(chatBytes);
 
         return Parse(chatText, mediaFiles);
+    }
+
+    private static ZipArchiveEntry? SelectChatEntry(IReadOnlyList<ZipArchiveEntry> chatCandidates)
+    {
+        foreach (var preferredName in PreferredChatFileNames)
+        {
+            var preferred = chatCandidates.FirstOrDefault(entry =>
+                string.Equals(entry.Name, preferredName, StringComparison.OrdinalIgnoreCase));
+            if (preferred != null)
+                return preferred;
+        }
+
+        var prefixed = chatCandidates
+            .Where(entry => PreferredChatFilePrefixes.Any(prefix =>
+                entry.Name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+            .OrderBy(entry => entry.Name.Length)
+            .ThenBy(entry => entry.FullName.Length)
+            .FirstOrDefault();
+
+        return prefixed;
+    }
+
+    private static async Task<byte[]> ReadEntryBytesAsync(Stream stream, long maxBytes, string label)
+    {
+        using var ms = new MemoryStream();
+        var buffer = new byte[81920];
+        long totalBytes = 0;
+
+        while (true)
+        {
+            var read = await stream.ReadAsync(buffer, 0, buffer.Length);
+            if (read == 0)
+                break;
+
+            totalBytes += read;
+            if (totalBytes > maxBytes)
+                throw new InvalidDataException($"{label} exceeds the allowed size of {FormatSize(maxBytes)}.");
+
+            await ms.WriteAsync(buffer, 0, read);
+        }
+
+        return ms.ToArray();
+    }
+
+    private static void ValidateEntryLimit(ZipArchiveEntry entry, long maxBytes, string label)
+    {
+        if (entry.Length > maxBytes)
+            throw new InvalidDataException($"{label} exceeds the allowed size of {FormatSize(maxBytes)}.");
+    }
+
+    private static void ValidateTotalExtractionLimit(long currentBytes, long nextEntryBytes, long maxTotalBytes)
+    {
+        if (nextEntryBytes > maxTotalBytes - currentBytes)
+            throw new InvalidDataException($"ZIP content exceeds the allowed extracted size of {FormatSize(maxTotalBytes)}.");
+    }
+
+    private static string FormatSize(long bytes)
+    {
+        var megaBytes = bytes / (1024d * 1024d);
+        return $"{megaBytes:0.#} MB";
     }
 
     private static bool IsMediaFile(string ext) => ext switch
