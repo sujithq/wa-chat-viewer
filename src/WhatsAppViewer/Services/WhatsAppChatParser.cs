@@ -367,10 +367,11 @@ public class WhatsAppChatParser
             throw new InvalidOperationException("No supported chat text file found in the ZIP archive. Expected '_chat.txt', 'chat.txt', or a filename starting with 'WhatsApp Chat with'.");
 
         ValidateEntryLimit(selectedChat, _maxChatTextBytes, $"Chat file '{selectedChat.FullName}'");
-        ValidateTotalExtractionLimit(totalExtractedBytes, selectedChat.Length, _maxTotalExtractedBytes);
 
         await using var chatStream = selectedChat.Open();
         var chatBytes = await ReadEntryBytesAsync(chatStream, _maxChatTextBytes, $"Chat file '{selectedChat.FullName}'");
+        ValidateTotalExtractionLimit(totalExtractedBytes, chatBytes.LongLength, _maxTotalExtractedBytes);
+        totalExtractedBytes += chatBytes.LongLength;
         var chatText = Encoding.UTF8.GetString(chatBytes);
 
         return Parse(chatText, mediaFiles);
