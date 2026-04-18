@@ -268,17 +268,12 @@ public class WhatsAppChatParser
 
     private static string? FindMediaKey(Dictionary<string, (byte[] Data, string MimeType)> media, string fileName)
     {
-        // O(1) exact case-sensitive match
-        if (media.ContainsKey(fileName))
+        // O(1) exact match — the dictionary uses OrdinalIgnoreCase, so this handles both
+        // case-exact and case-insensitive full-path lookups in a single operation.
+        if (media.TryGetValue(fileName, out _))
             return fileName;
 
-        // O(n) case-insensitive exact match fallback
-        var directMatch = media.Keys.FirstOrDefault(k =>
-            string.Equals(k, fileName, StringComparison.OrdinalIgnoreCase));
-        if (directMatch != null)
-            return directMatch;
-
-        // Match by filename when the candidate is unique.
+        // Match by base filename alone when the result is unambiguous.
         var filenameMatches = media.Keys
             .Where(k => string.Equals(Path.GetFileName(k), fileName, StringComparison.OrdinalIgnoreCase))
             .Take(2)
