@@ -163,11 +163,12 @@
                             @switch (msg.Type)
                             {
                                 case MessageType.Image when msg.MediaData != null:
+                                    var imageUrl = $"data:{msg.MediaMimeType};base64,{Convert.ToBase64String(msg.MediaData)}";
                                     <div class="wa-media-img">
-                                        <img src="data:@msg.MediaMimeType;base64,@Convert.ToBase64String(msg.MediaData)"
+                                        <img src="@imageUrl"
                                              alt="@msg.MediaFileName"
                                              loading="lazy"
-                                             @onclick="() => OpenLightbox(msg)" />
+                                             @onclick="() => OpenLightbox(imageUrl)" />
                                     </div>
                                     break;
                                 case MessageType.Video when msg.MediaData != null:
@@ -236,7 +237,7 @@
     <!-- Lightbox -->
     @if (_lightboxUrl != null)
     {
-        <div class="wa-lightbox" @onclick="CloseLightbox">
+        <div class="wa-lightbox" role="dialog" aria-modal="true" @onclick="CloseLightbox">
             <img src="@_lightboxUrl" alt="Full size image" @onclick:stopPropagation />
             <button class="wa-lightbox-close" aria-label="Close image preview" @onclick="CloseLightbox">✕</button>
         </div>
@@ -326,10 +327,9 @@
         ClearSearch();
     }
 
-    private void OpenLightbox(ChatMessage msg)
+    private void OpenLightbox(string mediaUrl)
     {
-        if (msg.MediaData != null)
-            _lightboxUrl = $"data:{msg.MediaMimeType};base64,{Convert.ToBase64String(msg.MediaData)}";
+        _lightboxUrl = mediaUrl;
     }
 
     private void CloseLightbox() => _lightboxUrl = null;

@@ -36,6 +36,28 @@ public class HomePageTests : PageTest
         return ms.ToArray();
     }
 
+    private static byte[] CreateZipWithChatAndMedia(string chatContent, string mediaFileName, byte[] mediaBytes)
+    {
+        using var ms = new MemoryStream();
+        using (var archive = new ZipArchive(ms, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            var chatEntry = archive.CreateEntry("_chat.txt");
+            using (var stream = chatEntry.Open())
+            using (var writer = new StreamWriter(stream, Encoding.UTF8))
+            {
+                writer.Write(chatContent);
+            }
+
+            var mediaEntry = archive.CreateEntry(mediaFileName);
+            using (var mediaStream = mediaEntry.Open())
+            {
+                mediaStream.Write(mediaBytes, 0, mediaBytes.Length);
+            }
+        }
+
+        return ms.ToArray();
+    }
+
     private async Task UploadChatAsync(string chatContent)
     {
         await Page.GotoAsync("/");
@@ -122,5 +144,32 @@ public class HomePageTests : PageTest
 
         await Page.Locator("[aria-label='Previous match']").ClickAsync();
         await Expect(Page.Locator(".wa-search-count")).ToContainTextAsync("1/3");
+    }
+
+    [TestMethod]
+    public async Task ClickingImage_OpensLightbox()
+    {
+        await Page.GotoAsync("/");
+
+        var oneByOnePng = Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO8M6fUAAAAASUVORK5CYII=");
+        var chat = "1/15/24, 9:30 AM - Alice: IMG-20240115-WA0001.jpg (file attached)";
+
+        var file = new FilePayload
+        {
+            Name = "chat-export.zip",
+            MimeType = "application/zip",
+            Buffer = CreateZipWithChatAndMedia(chat, "IMG-20240115-WA0001.jpg", oneByOnePng)
+        };
+
+        await Page.SetInputFilesAsync(".wa-file-input", file);
+        await Expect(Page.Locator(".wa-media-img img")).ToBeVisibleAsync();
+
+        await Page.Locator(".wa-media-img img").First.ClickAsync();
+        await Expect(Page.Locator(".wa-lightbox")).ToBeVisibleAsync();
+        await Expect(Page.Locator(".wa-lightbox img")).ToBeVisibleAsync();
+
+        await Page.Locator("[aria-label='Close image preview']").ClickAsync();
+        await Expect(Page.Locator(".wa-lightbox")).ToHaveCountAsync(0);
     }
 }
