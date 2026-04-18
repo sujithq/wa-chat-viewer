@@ -268,7 +268,11 @@ public class WhatsAppChatParser
 
     private static string? FindMediaKey(Dictionary<string, (byte[] Data, string MimeType)> media, string fileName)
     {
-        // Exact match
+        // O(1) exact case-sensitive match
+        if (media.ContainsKey(fileName))
+            return fileName;
+
+        // O(n) case-insensitive exact match fallback
         var directMatch = media.Keys.FirstOrDefault(k =>
             string.Equals(k, fileName, StringComparison.OrdinalIgnoreCase));
         if (directMatch != null)
@@ -352,10 +356,10 @@ public class WhatsAppChatParser
                 throw new InvalidDataException($"The ZIP contains more than {_maxMediaFiles} media files.");
 
             ValidateEntryLimit(entry, _maxMediaFileBytes, $"Media file '{entry.FullName}'");
-            ValidateTotalExtractionLimit(totalExtractedBytes, entry.Length, _maxTotalExtractedBytes);
 
             await using var stream = entry.Open();
             var data = await ReadEntryBytesAsync(stream, _maxMediaFileBytes, $"Media file '{entry.FullName}'");
+            ValidateTotalExtractionLimit(totalExtractedBytes, data.LongLength, _maxTotalExtractedBytes);
             totalExtractedBytes += data.LongLength;
 
             var mimeType = GetMimeType(ext);

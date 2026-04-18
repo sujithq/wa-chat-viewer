@@ -255,6 +255,33 @@ public class WhatsAppChatParserTests
     }
 
     [TestMethod]
+    public async Task ParseZipAsync_OversizedChatTextFile_ThrowsInvalidDataException()
+    {
+        var parser = new WhatsAppChatParser(maxChatTextBytes: 100);
+        var oversizedChat = System.Text.Encoding.UTF8.GetBytes(new string('A', 200));
+        using var ms = CreateZip(("_chat.txt", oversizedChat));
+
+        await Assert.ThrowsExceptionAsync<InvalidDataException>(() => parser.ParseZipAsync(ms));
+    }
+
+    [TestMethod]
+    public async Task ParseZipAsync_TooManyMediaFiles_ThrowsInvalidDataException()
+    {
+        var parser = new WhatsAppChatParser(maxMediaFiles: 2);
+        var chatText = System.Text.Encoding.UTF8.GetBytes("1/15/24, 9:30 AM - Alice: Hello!");
+        var entries = new List<(string Name, byte[] Data)>
+        {
+            ("_chat.txt", chatText),
+            ("IMG-1.jpg", new byte[] { 0xFF, 0xD8 }),
+            ("IMG-2.jpg", new byte[] { 0xFF, 0xD8 }),
+            ("IMG-3.jpg", new byte[] { 0xFF, 0xD8 }),
+        };
+        using var ms = CreateZip(entries.ToArray());
+
+        await Assert.ThrowsExceptionAsync<InvalidDataException>(() => parser.ParseZipAsync(ms));
+    }
+
+    [TestMethod]
     public async Task ParseZipAsync_OversizedMediaFile_ThrowsInvalidDataException()
     {
         var parser = new WhatsAppChatParser(maxMediaFileBytes: 1024, maxTotalExtractedBytes: 10 * 1024 * 1024);
