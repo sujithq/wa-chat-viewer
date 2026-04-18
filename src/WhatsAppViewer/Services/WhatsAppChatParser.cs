@@ -432,6 +432,14 @@ public class WhatsAppChatParser
 
     private static string FormatSize(long bytes)
     {
+        if (bytes < 1024)
+            return $"{bytes} byte{(bytes == 1 ? string.Empty : "s")}";
+
+        if (bytes < 1024L * 1024L)
+        {
+            var kiloBytes = bytes / 1024d;
+            return $"{kiloBytes:0.#} KB";
+        }
         var megaBytes = bytes / (1024d * 1024d);
         return $"{megaBytes:0.#} MB";
     }
