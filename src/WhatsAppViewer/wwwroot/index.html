@@ -40,9 +40,37 @@
     </div>
     <script>
         window.scrollToBottom = (element) => {
-            if (element) {
-                element.scrollTop = element.scrollHeight;
+            if (!element) {
+                return;
             }
+
+            const apply = () => {
+                element.scrollTop = element.scrollHeight;
+            };
+
+            // Run across multiple layout phases to handle late media sizing.
+            apply();
+            window.requestAnimationFrame(apply);
+            window.setTimeout(apply, 60);
+            window.setTimeout(apply, 220);
+
+            const media = element.querySelectorAll('img, video');
+            media.forEach((item) => {
+                if (item.tagName === 'IMG') {
+                    if (item.complete) {
+                        return;
+                    }
+
+                    item.addEventListener('load', apply, { once: true });
+                    return;
+                }
+
+                if (item.readyState >= 1) {
+                    return;
+                }
+
+                item.addEventListener('loadedmetadata', apply, { once: true });
+            });
         };
 
         window.scrollToMessageByIndex = (container, messageIndex) => {

@@ -255,6 +255,7 @@
     private readonly List<ChatSearchMatch> _searchMatches = new();
     private readonly Dictionary<int, List<ChatSearchMatch>> _searchMatchesByMessage = new();
     private int _activeSearchMatchIndex = -1;
+    private bool _scrollToBottomAfterRender;
 
     private readonly WhatsAppChatParser _parser = new();
     private readonly ChatSearchService _searchService = new();
@@ -306,7 +307,7 @@
             ms.Position = 0;
             _conversation = await _parser.ParseZipAsync(ms);
             ClearSearch();
-            await ScrollToBottomAsync();
+            _scrollToBottomAfterRender = true;
         }
         catch (Exception ex)
         {
@@ -336,8 +337,18 @@
 
     private async Task ScrollToBottomAsync()
     {
-        await Task.Delay(100);
         await JS.InvokeVoidAsync("scrollToBottom", _chatAreaRef);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_scrollToBottomAfterRender && _conversation != null)
+        {
+            _scrollToBottomAfterRender = false;
+            await ScrollToBottomAsync();
+        }
+
+        await base.OnAfterRenderAsync(firstRender);
     }
 
     private static string FormatDate(DateTime dt)
