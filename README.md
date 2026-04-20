@@ -167,10 +167,18 @@ The workflow:
 
 - Runs unit tests and Playwright smoke tests first
 - Publishes Blazor assets
-- Rewrites the published base href for GitHub Pages hosting:
-	- Uses / when a CNAME file is present for custom-domain deployments
+- Configures the published base href for GitHub Pages hosting:
+	- Uses / when the repository Actions variable PAGES_CUSTOM_DOMAIN is set
 	- Uses /{repo-name}/ for standard GitHub project pages deployments
+- Writes a published CNAME file only when PAGES_CUSTOM_DOMAIN is set
 - Uploads artifact and deploys to GitHub Pages
+
+For custom-domain deployments in this template-derived repo:
+
+- Set the repository Actions variable PAGES_CUSTOM_DOMAIN to your domain name
+- Configure the same domain in the repository's GitHub Pages settings
+
+This template does not keep a committed root CNAME file so generated repositories do not inherit another repo's custom-domain configuration.
 
 ## Good First Contribution Areas
 

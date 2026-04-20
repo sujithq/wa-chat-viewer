@@ -78,12 +78,16 @@ jobs:
             -o publish \
             --nologo
 
-      - name: Rewrite base href for GitHub Pages
+      - name: Configure GitHub Pages base href and custom domain
+        env:
+          CUSTOM_DOMAIN: ${{ vars.PAGES_CUSTOM_DOMAIN }}
         run: |
-          if [ -f CNAME ]; then
+          if [ -n "$CUSTOM_DOMAIN" ]; then
             BASE_HREF="/"
+            printf '%s\n' "$CUSTOM_DOMAIN" > publish/wwwroot/CNAME
           else
             BASE_HREF="/${{ github.event.repository.name }}/"
+            rm -f publish/wwwroot/CNAME
           fi
           sed -i "s|<base href=\"/\" />|<base href=\"${BASE_HREF}\" />|g" publish/wwwroot/index.html
 
