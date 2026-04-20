@@ -167,6 +167,9 @@ The workflow:
 
 - Runs unit tests and Playwright smoke tests first
 - Publishes Blazor assets
+- Rewrites the published base href for GitHub Pages hosting:
+	- Uses / when a CNAME file is present for custom-domain deployments
+	- Uses /{repo-name}/ for standard GitHub project pages deployments
 - Uploads artifact and deploys to GitHub Pages
 
 ## Good First Contribution Areas

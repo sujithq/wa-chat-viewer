@@ -78,6 +78,15 @@ jobs:
             -o publish \
             --nologo
 
+      - name: Rewrite base href for GitHub Pages
+        run: |
+          if [ -f CNAME ]; then
+            BASE_HREF="/"
+          else
+            BASE_HREF="/${{ github.event.repository.name }}/"
+          fi
+          sed -i "s|<base href=\"/\" />|<base href=\"${BASE_HREF}\" />|g" publish/wwwroot/index.html
+
       - name: Add .nojekyll
         run: touch publish/wwwroot/.nojekyll
 
