@@ -256,6 +256,6 @@ public class HomePageTests : PageTest
         };
 
         await Page.SetInputFilesAsync(".wa-file-input", file);
-        await Expect(Page.Locator(".wa-error-toast")).ToContainTextAsync("No supported chat text file found");
+        await Expect(Page.Locator(".wa-error-toast")).ToContainTextAsync("did not contain any supported WhatsApp messages");
     }
 }
