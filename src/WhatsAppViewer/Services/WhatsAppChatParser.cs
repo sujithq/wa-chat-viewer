@@ -17,6 +17,13 @@ public class WhatsAppChatParser
     private readonly long _maxTotalExtractedBytes;
     private readonly int _maxMediaFiles;
 
+    private enum DateOrderPreference
+    {
+        Unknown,
+        MonthFirst,
+        DayFirst
+    }
+
     private static readonly string[] PreferredChatFileNames =
     {
         "_chat.txt",
@@ -25,11 +32,14 @@ public class WhatsAppChatParser
 
     private static readonly string[] PreferredChatFilePrefixes =
     {
-        "WhatsApp Chat with"
+        "WhatsApp Chat with",
+        "WhatsApp Chat -",
+        "WhatsApp-chat"
     };
 
     // Android format: MM/DD/YYYY, HH:MM - Sender: message
     // Android format (24h): DD/MM/YYYY, HH:MM - Sender: message
+    // Android format without comma: DD/MM/YYYY HH:MM - Sender: message
     // iOS format: [DD/MM/YYYY, HH:MM:SS] Sender: message
     // Android format with AM/PM: M/D/YY, H:MM AM - Sender: message
 
@@ -37,25 +47,55 @@ public class WhatsAppChatParser
     {
         // iOS: [01/23/2024, 12:34:56] Sender: Message
         new Regex(@"^\[(\d{1,2}/\d{1,2}/\d{2,4}),\s*(\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?)\]\s*([^:]+?):\s*(.*)", RegexOptions.Compiled),
-        // Android: 01/23/24, 12:34 AM - Sender: Message  OR  23/01/2024, 12:34 - Sender: Message
-        new Regex(@"^(\d{1,2}/\d{1,2}/\d{2,4}),\s*(\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?)\s*-\s*([^:]+?):\s*(.*)", RegexOptions.Compiled),
+        // Android: 01/23/24, 12:34 AM - Sender: Message  OR  23/01/2024 12:34 - Sender: Message
+        new Regex(@"^(\d{1,2}/\d{1,2}/\d{2,4})(?:,\s*|\s+)(\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?)\s*-\s*([^:]+?):\s*(.*)", RegexOptions.Compiled),
         // Android with dash in date: 01-23-24, 12:34 AM - Sender: Message
-        new Regex(@"^(\d{1,2}-\d{1,2}-\d{2,4}),\s*(\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?)\s*-\s*([^:]+?):\s*(.*)", RegexOptions.Compiled),
+        new Regex(@"^(\d{1,2}-\d{1,2}-\d{2,4})(?:,\s*|\s+)(\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?)\s*-\s*([^:]+?):\s*(.*)", RegexOptions.Compiled),
     };
 
     private static readonly Regex[] SystemMessagePatterns = new[]
     {
         // iOS system: [01/23/2024, 12:34:56] System message (no colon after sender)
         new Regex(@"^\[(\d{1,2}/\d{1,2}/\d{2,4}),\s*(\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?)\]\s*(.*)", RegexOptions.Compiled),
-        // Android system: 01/23/24, 12:34 AM - System message
-        new Regex(@"^(\d{1,2}/\d{1,2}/\d{2,4}),\s*(\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?)\s*-\s*(.*)", RegexOptions.Compiled),
+        // Android system: 01/23/24, 12:34 AM - System message OR 23/01/2024 12:34 - System message
+        new Regex(@"^(\d{1,2}/\d{1,2}/\d{2,4})(?:,\s*|\s+)(\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?)\s*-\s*(.*)", RegexOptions.Compiled),
         // Android with dash in date: 01-23-24, 12:34 AM - System message
-        new Regex(@"^(\d{1,2}-\d{1,2}-\d{2,4}),\s*(\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?)\s*-\s*(.*)", RegexOptions.Compiled),
+        new Regex(@"^(\d{1,2}-\d{1,2}-\d{2,4})(?:,\s*|\s+)(\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?)\s*-\s*(.*)", RegexOptions.Compiled),
     };
 
     private static readonly Regex MediaOmittedPattern = new Regex(@"<Media omitted>|<[^>]+ omitted>", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-    private static readonly Regex AttachedFilePattern = new Regex(@"^(.+?)\s*\(file attached\)$", RegexOptions.Compiled);
+    private static readonly Regex AttachedFilePattern = new Regex(@"^[\u200E\u200F\uFEFF\s]*(.+?)\s*\((?:file attached|bestand bijgevoegd)\)[\u200E\u200F\uFEFF\s]*$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex AttachedTagPattern = new Regex(@"^[\u200E\u200F\uFEFF\s]*<attached:\s*(.+?)>[\u200E\u200F\uFEFF\s]*$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static readonly string[] MonthFirstDateTimeFormats =
+    {
+        "M/d/yyyy h:mm tt",
+        "M/d/yyyy h:mm:ss tt",
+        "M/d/yyyy HH:mm",
+        "M/d/yyyy HH:mm:ss",
+        "M/d/yy h:mm tt",
+        "M/d/yy h:mm:ss tt",
+        "M/d/yy HH:mm",
+        "M/d/yy HH:mm:ss",
+    };
+
+    private static readonly string[] DayFirstDateTimeFormats =
+    {
+        "d/M/yyyy h:mm tt",
+        "d/M/yyyy h:mm:ss tt",
+        "d/M/yyyy HH:mm",
+        "d/M/yyyy HH:mm:ss",
+        "d/M/yy h:mm tt",
+        "d/M/yy h:mm:ss tt",
+        "d/M/yy HH:mm",
+        "d/M/yy HH:mm:ss",
+    };
+
+    private static readonly string[] YearFirstDateTimeFormats =
+    {
+        "yyyy/M/d HH:mm",
+        "yyyy/M/d HH:mm:ss",
+    };
 
     public WhatsAppChatParser(
         long maxChatTextBytes = DefaultMaxChatTextBytes,
@@ -85,6 +125,7 @@ public class WhatsAppChatParser
             conversation.MediaFiles = mediaFiles;
 
         var lines = chatText.Split('\n');
+        var dateOrderPreference = InferDateOrderPreference(lines);
         ChatMessage? currentMessage = null;
 
         foreach (var rawLine in lines)
@@ -94,7 +135,7 @@ public class WhatsAppChatParser
             if (string.IsNullOrEmpty(line)) continue;
 
             // Try to parse as a new message
-            var parsed = TryParseMessageLine(line);
+            var parsed = TryParseMessageLine(line, dateOrderPreference);
             if (parsed != null)
             {
                 if (currentMessage != null)
@@ -164,7 +205,7 @@ public class WhatsAppChatParser
         return index == 0 ? value : value[index..];
     }
 
-    private ChatMessage? TryParseMessageLine(string line)
+    private ChatMessage? TryParseMessageLine(string line, DateOrderPreference dateOrderPreference)
     {
         // Try each message pattern
         for (int i = 0; i < MessagePatterns.Length; i++)
@@ -177,7 +218,7 @@ public class WhatsAppChatParser
                 var sender = match.Groups[3].Value.Trim();
                 var content = match.Groups[4].Value;
 
-                if (!TryParseDateTime(dateStr, timeStr, out var dt))
+                if (!TryParseDateTime(dateStr, timeStr, dateOrderPreference, out var dt))
                     dt = DateTime.MinValue;
 
                 return CreateMessage(dt, sender, content, false);
@@ -194,7 +235,7 @@ public class WhatsAppChatParser
                 var timeStr = match.Groups[2].Value;
                 var content = match.Groups[3].Value;
 
-                if (!TryParseDateTime(dateStr, timeStr, out var dt))
+                if (!TryParseDateTime(dateStr, timeStr, dateOrderPreference, out var dt))
                     dt = DateTime.MinValue;
 
                 return CreateMessage(dt, string.Empty, content, true);
@@ -285,7 +326,60 @@ public class WhatsAppChatParser
         return null;
     }
 
-    private static bool TryParseDateTime(string dateStr, string timeStr, out DateTime result)
+    private static DateOrderPreference InferDateOrderPreference(IEnumerable<string> lines)
+    {
+        foreach (var rawLine in lines)
+        {
+            var line = TrimLeadingUnicodeMarkers(rawLine.TrimEnd('\r'));
+            if (string.IsNullOrEmpty(line))
+                continue;
+
+            var dateStr = ExtractDateString(line);
+            if (dateStr == null || !TryGetDateParts(dateStr, out var firstPart, out var secondPart))
+                continue;
+
+            if (firstPart > 12 && secondPart <= 12)
+                return DateOrderPreference.DayFirst;
+
+            if (secondPart > 12 && firstPart <= 12)
+                return DateOrderPreference.MonthFirst;
+        }
+
+        return DateOrderPreference.Unknown;
+    }
+
+    private static string? ExtractDateString(string line)
+    {
+        foreach (var pattern in MessagePatterns)
+        {
+            var match = pattern.Match(line);
+            if (match.Success)
+                return match.Groups[1].Value;
+        }
+
+        foreach (var pattern in SystemMessagePatterns)
+        {
+            var match = pattern.Match(line);
+            if (match.Success)
+                return match.Groups[1].Value;
+        }
+
+        return null;
+    }
+
+    private static bool TryGetDateParts(string dateStr, out int firstPart, out int secondPart)
+    {
+        firstPart = 0;
+        secondPart = 0;
+
+        var parts = dateStr.Replace('-', '/').Split('/');
+        if (parts.Length < 2)
+            return false;
+
+        return int.TryParse(parts[0], out firstPart) && int.TryParse(parts[1], out secondPart);
+    }
+
+    private static bool TryParseDateTime(string dateStr, string timeStr, DateOrderPreference dateOrderPreference, out DateTime result)
     {
         result = DateTime.MinValue;
         var combined = $"{dateStr} {timeStr.Trim()}";
@@ -293,31 +387,24 @@ public class WhatsAppChatParser
         // Normalize date separators
         combined = combined.Replace('-', '/');
 
-        string[] formats =
+        var formatGroups = dateOrderPreference switch
         {
-            "M/d/yyyy h:mm tt",
-            "M/d/yyyy h:mm:ss tt",
-            "M/d/yyyy HH:mm",
-            "M/d/yyyy HH:mm:ss",
-            "d/M/yyyy h:mm tt",
-            "d/M/yyyy h:mm:ss tt",
-            "d/M/yyyy HH:mm",
-            "d/M/yyyy HH:mm:ss",
-            "M/d/yy h:mm tt",
-            "M/d/yy h:mm:ss tt",
-            "M/d/yy HH:mm",
-            "M/d/yy HH:mm:ss",
-            "d/M/yy h:mm tt",
-            "d/M/yy h:mm:ss tt",
-            "d/M/yy HH:mm",
-            "d/M/yy HH:mm:ss",
-            "yyyy/M/d HH:mm",
-            "yyyy/M/d HH:mm:ss",
+            DateOrderPreference.DayFirst => new[] { DayFirstDateTimeFormats, MonthFirstDateTimeFormats, YearFirstDateTimeFormats },
+            DateOrderPreference.MonthFirst => new[] { MonthFirstDateTimeFormats, DayFirstDateTimeFormats, YearFirstDateTimeFormats },
+            _ => new[] { MonthFirstDateTimeFormats, DayFirstDateTimeFormats, YearFirstDateTimeFormats },
         };
 
-        return DateTime.TryParseExact(combined.Trim(), formats,
-            System.Globalization.CultureInfo.InvariantCulture,
-            System.Globalization.DateTimeStyles.None, out result);
+        foreach (var formats in formatGroups)
+        {
+            if (DateTime.TryParseExact(combined.Trim(), formats,
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out result))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public async Task<ChatConversation> ParseZipAsync(Stream zipStream)
@@ -363,7 +450,7 @@ public class WhatsAppChatParser
 
         var selectedChat = SelectChatEntry(chatCandidates);
         if (selectedChat == null)
-            throw new InvalidOperationException("No supported chat text file found in the ZIP archive. Expected '_chat.txt', 'chat.txt', or a filename starting with 'WhatsApp Chat with'.");
+            throw new InvalidOperationException("No supported chat text file found in the ZIP archive. Expected '_chat.txt', 'chat.txt', or a filename starting with 'WhatsApp Chat with', 'WhatsApp Chat -', or 'WhatsApp-chat'.");
 
         ValidateEntryLimit(selectedChat, _maxChatTextBytes, $"Chat file '{selectedChat.FullName}'");
 
@@ -373,7 +460,11 @@ public class WhatsAppChatParser
         totalExtractedBytes += chatBytes.LongLength;
         var chatText = Encoding.UTF8.GetString(chatBytes);
 
-        return Parse(chatText, mediaFiles);
+        var conversation = Parse(chatText, mediaFiles);
+        if (conversation.Messages.Count == 0)
+            throw new InvalidOperationException($"Chat file '{selectedChat.FullName}' did not contain any supported WhatsApp messages.");
+
+        return conversation;
     }
 
     private static ZipArchiveEntry? SelectChatEntry(IReadOnlyList<ZipArchiveEntry> chatCandidates)
@@ -393,7 +484,13 @@ public class WhatsAppChatParser
             .ThenBy(entry => entry.FullName.Length)
             .FirstOrDefault();
 
-        return prefixed;
+        if (prefixed != null)
+            return prefixed;
+
+        if (chatCandidates.Count == 1)
+            return chatCandidates[0];
+
+        return null;
     }
 
     private static async Task<byte[]> ReadEntryBytesAsync(Stream stream, long maxBytes, string label)

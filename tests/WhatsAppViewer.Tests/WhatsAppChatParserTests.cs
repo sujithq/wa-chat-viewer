@@ -40,6 +40,41 @@ public class WhatsAppChatParserTests
     }
 
     [TestMethod]
+    public void Parse_AndroidFormatWithoutComma_ParsesMessages()
+    {
+        var chatText = "1/12/2021 09:36 - Alice: Hello!\n2/01/2022 15:13 - Bob: Hi there!";
+        var result = _parser.Parse(chatText);
+
+        Assert.AreEqual(2, result.Messages.Count);
+        Assert.AreEqual("Alice", result.Messages[0].Sender);
+        Assert.AreEqual("Hello!", result.Messages[0].Content);
+        Assert.AreEqual("Bob", result.Messages[1].Sender);
+        Assert.AreEqual("Hi there!", result.Messages[1].Content);
+    }
+
+    [TestMethod]
+    public void Parse_DayFirstRegionalFormat_PrefersDayMonthForAmbiguousDates()
+    {
+        var chatText = "13/01/2024 09:00 - Alice: Unambiguous day first\n1/12/2024 10:00 - Bob: Ambiguous day first";
+        var result = _parser.Parse(chatText);
+
+        Assert.AreEqual(2, result.Messages.Count);
+        Assert.AreEqual(new DateTime(2024, 1, 13, 9, 0, 0), result.Messages[0].Timestamp);
+        Assert.AreEqual(new DateTime(2024, 12, 1, 10, 0, 0), result.Messages[1].Timestamp);
+    }
+
+    [TestMethod]
+    public void Parse_MonthFirstRegionalFormat_PrefersMonthDayForAmbiguousDates()
+    {
+        var chatText = "1/13/2024 09:00 - Alice: Unambiguous month first\n1/12/2024 10:00 - Bob: Ambiguous month first";
+        var result = _parser.Parse(chatText);
+
+        Assert.AreEqual(2, result.Messages.Count);
+        Assert.AreEqual(new DateTime(2024, 1, 13, 9, 0, 0), result.Messages[0].Timestamp);
+        Assert.AreEqual(new DateTime(2024, 1, 12, 10, 0, 0), result.Messages[1].Timestamp);
+    }
+
+    [TestMethod]
     public void Parse_iOSFormat_ParsesMessages()
     {
         var chatText = "[15/01/2024, 09:30:00] Alice: Hello!\n[15/01/2024, 09:31:00] Bob: Hi there!";
@@ -80,6 +115,17 @@ public class WhatsAppChatParserTests
         Assert.AreEqual(1, result.Messages.Count);
         Assert.AreEqual(MessageType.Image, result.Messages[0].Type);
         Assert.AreEqual("IMG-20240115-WA0001.jpg", result.Messages[0].MediaFileName);
+    }
+
+    [TestMethod]
+    public void Parse_DutchAndroidAttachedImage_DetectedCorrectly()
+    {
+        var chatText = "1/12/2021 09:36 - Alice: IMG-20220102-WA0000.jpg (bestand bijgevoegd)";
+        var result = _parser.Parse(chatText);
+
+        Assert.AreEqual(1, result.Messages.Count);
+        Assert.AreEqual(MessageType.Image, result.Messages[0].Type);
+        Assert.AreEqual("IMG-20220102-WA0000.jpg", result.Messages[0].MediaFileName);
     }
 
     [TestMethod]
@@ -199,6 +245,32 @@ public class WhatsAppChatParserTests
     }
 
     [TestMethod]
+    public async Task ParseZipAsync_ZipWithLocalizedAndroidChatFileName_ParsesSuccessfully()
+    {
+        var chatText = System.Text.Encoding.UTF8.GetBytes("1/12/2021 09:36 - Alice: Hello!\n2/01/2022 15:13 - Bob: Hi!");
+        using var ms = CreateZip(("WhatsApp-chat met Alice.txt", chatText));
+
+        var result = await _parser.ParseZipAsync(ms);
+
+        Assert.AreEqual(2, result.Messages.Count);
+        CollectionAssert.Contains(result.Participants, "Alice");
+        CollectionAssert.Contains(result.Participants, "Bob");
+    }
+
+    [TestMethod]
+    public async Task ParseZipAsync_ZipWithSingleTextFile_UsesItAsChatFile()
+    {
+        var chatText = System.Text.Encoding.UTF8.GetBytes("1/15/24, 9:30 AM - Alice: Hello from a single text file");
+        using var ms = CreateZip(("conversation-export.txt", chatText));
+
+        var result = await _parser.ParseZipAsync(ms);
+
+        Assert.AreEqual(1, result.Messages.Count);
+        Assert.AreEqual("Alice", result.Messages[0].Sender);
+        Assert.AreEqual("Hello from a single text file", result.Messages[0].Content);
+    }
+
+    [TestMethod]
     public async Task ParseZipAsync_ZipWithUnknownTxtFile_ThrowsInvalidOperationException()
     {
         var notes = System.Text.Encoding.UTF8.GetBytes("Not a WhatsApp export");
@@ -237,6 +309,23 @@ public class WhatsAppChatParserTests
         Assert.AreEqual(1, result.Messages.Count);
         Assert.AreEqual(MessageType.Image, result.Messages[0].Type);
         Assert.IsNotNull(result.Messages[0].MediaData);
+    }
+
+    [TestMethod]
+    public async Task ParseZipAsync_DutchAndroidAttachment_ResolvesMedia()
+    {
+        var chatText = System.Text.Encoding.UTF8.GetBytes("1/12/2021 09:36 - Alice: IMG-20220102-WA0000.jpg (bestand bijgevoegd)");
+        var imageBytes = new byte[] { 0xFF, 0xD8, 0xFF, 0xE0 };
+        using var ms = CreateZip(
+            ("WhatsApp-chat met Alice.txt", chatText),
+            ("IMG-20220102-WA0000.jpg", imageBytes));
+
+        var result = await _parser.ParseZipAsync(ms);
+
+        Assert.AreEqual(1, result.Messages.Count);
+        Assert.AreEqual(MessageType.Image, result.Messages[0].Type);
+        Assert.IsNotNull(result.Messages[0].MediaData);
+        Assert.AreEqual("image/jpeg", result.Messages[0].MediaMimeType);
     }
 
     [TestMethod]

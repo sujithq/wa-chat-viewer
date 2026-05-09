@@ -144,6 +144,29 @@ public class HomePageTests : PageTest
     }
 
     [TestMethod]
+    public async Task UploadWithLocalizedAndroidExport_ShowsChat()
+    {
+        await Page.GotoAsync("/");
+
+        var androidZip = CreateZipWithEntries(
+            ("WhatsApp-chat met Alice.txt", Encoding.UTF8.GetBytes("1/12/2021 09:36 - Alice: Hello\n2/01/2022 15:13 - Bob: Hi")));
+
+        var file = new FilePayload
+        {
+            Name = "WhatsApp-chat.zip",
+            MimeType = "application/zip",
+            Buffer = androidZip
+        };
+
+        await Page.SetInputFilesAsync(".wa-file-input", file);
+
+        await Expect(Page.Locator(".wa-chat-area")).ToBeVisibleAsync();
+        await Expect(Page.Locator(".wa-subtitle")).ToContainTextAsync("2 participant(s)");
+        await Expect(Page.Locator(".wa-subtitle")).ToContainTextAsync("2 message(s)");
+        await Expect(Page.Locator(".wa-msg-text")).ToContainTextAsync(new[] { "Hello", "Hi" });
+    }
+
+    [TestMethod]
     public async Task Search_NextPrevious_UpdatesActiveMatch()
     {
         await UploadChatAsync(
@@ -190,6 +213,30 @@ public class HomePageTests : PageTest
 
         await Page.Locator("[aria-label='Close image preview']").ClickAsync();
         await Expect(Page.Locator(".wa-lightbox")).ToHaveCountAsync(0);
+    }
+
+    [TestMethod]
+    [TestCategory("Smoke")]
+    public async Task UploadWithDutchAndroidImageAttachment_ShowsImage()
+    {
+        await Page.GotoAsync("/");
+
+        var oneByOneJpg = Convert.FromBase64String(
+            "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAH/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAEFAqf/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAEDAQE/ASP/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAECAQE/ASP/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAY/Al//xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAE/IV//2gAMAwEAAgADAAAAEP/EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8QP//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8QP//EABQQAQAAAAAAAAAAAAAAAAAAABD/2gAIAQEAAT8QP//Z");
+        var chat = "1/12/2021 09:36 - Alice: IMG-20220102-WA0000.jpg (bestand bijgevoegd)";
+
+        var file = new FilePayload
+        {
+            Name = "WhatsApp-chat.zip",
+            MimeType = "application/zip",
+            Buffer = CreateZipWithEntries(
+                ("WhatsApp-chat met Alice.txt", Encoding.UTF8.GetBytes(chat)),
+                ("IMG-20220102-WA0000.jpg", oneByOneJpg))
+        };
+
+        await Page.SetInputFilesAsync(".wa-file-input", file);
+
+        await Expect(Page.Locator(".wa-media-img img")).ToBeVisibleAsync();
     }
 
     [TestMethod]
